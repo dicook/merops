@@ -41,7 +41,7 @@ table(patients$year_of_birth == 1900)
 Where we do have year of birth, how old are the patients?
 
 ```{r}
-ggplot(patients,aes(x=age)) + geom_bar()
+ggplot(patients,aes(x=age)) + geom_bar(width=1)
 ```
 
 
@@ -49,7 +49,7 @@ ggplot(patients,aes(x=age)) + geom_bar()
 
 A table was provided associating certain drugs with chronic illnesses. How many drugs are associated with each illness?
 
-```{r}
+```{r rows.print=11}
 drug_illness <- tbl(md,"ChronicIllness") %>%
     transmute(illness=ChronicIllness, Drug_ID=as.integer(MasterProductID)) %>%
     collect(n=Inf) %>%
@@ -115,7 +115,7 @@ illness_gender %>%
 
 What is the median age for each illness?
 
-```{r}
+```{r rows.print=11}
 illness_age <- patient_illness %>%
     inner_join(filter(patients, !is.na(age)), by="Patient_ID") %>%
     count(age, illness) %>% ungroup()
@@ -128,10 +128,10 @@ median_ages <- illness_age %>%
 median_ages
 ```
 
-```{r}
+```{r fig.width=4, fig.height=4}
 illness_age %>% 
     mutate(illness=factor(illness,median_ages$illness)) %>%
-    ggplot(aes(x=age,y=n)) + geom_bar(stat="identity") + 
+    ggplot(aes(x=age,y=n)) + geom_bar(stat="identity", width=1) + 
     facet_grid(illness~.,scales="free_y") + labs(y="Number of patients", x="Age") +
     theme(strip.text.y = element_text(angle=0))
 ```
