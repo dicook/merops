@@ -1,0 +1,141 @@
+---
+title: "Chronic Illness"
+output: html_notebook
+---
+
+```{r warning=FALSE, message=FALSE}
+library(tidyverse)
+library(viridis)
+
+md <- src_sqlite("MelbDatathon2017.sqlite", create=FALSE)
+src_tbls(md)
+```
+
+## What information do we have on patients?
+
+```{r}
+patients <- tbl(md,"Patients") %>% collect(n=Inf) %>%
+    mutate(
+        Patient_ID = as.integer(Patient_ID),
+        age=ifelse(year_of_birth==1900,NA,2017-year_of_birth))
+```
+
+Number of patients:
+
+```{r}
+nrow(patients)
+```
+
+Gender information:
+
+```{r}
+table(patients$gender)
+```
+
+1900 appears to encode missing year of birth. How many patients have 1900 as year of birth?
+
+```{r}
+table(patients$year_of_birth == 1900)
+```
+
+Where we do have year of birth, how old are the patients?
+
+```{r}
+ggplot(patients,aes(x=age)) + geom_bar()
+```
+
+
+## Chronic illness
+
+A table was provided associating certain drugs with chronic illnesses. How many drugs are associated with each illness?
+
+```{r}
+drug_illness <- tbl(md,"ChronicIllness") %>%
+    transmute(illness=ChronicIllness, Drug_ID=as.integer(MasterProductID)) %>%
+    collect(n=Inf) %>%
+    mutate(illness=ifelse(illness=="Chronic Obstructive Pulmonary Disease (COPD)","COPD",illness))
+
+drug_illness %>% count(illness)
+```
+
+### How many patients have taken a drug associated with a chronic illness?
+
+```{r}
+patient_drug <- tbl(md,"Transactions") %>%
+    count(Patient_ID, Drug_ID) %>%
+    collect(n=Inf) 
+
+patient_illness <- inner_join(ungroup(patient_drug), drug_illness, by="Drug_ID") %>%
+    distinct(Patient_ID, illness)
+```
+
+Most of the patients in the data set can be classified as having some chronic illness, or at least having taken a drug that is associated with a chronic illness.
+
+```{r}
+table(patients$Patient_ID %in% patient_illness$Patient_ID)
+```
+
+```{r}
+patient_illness %>% count(illness) %>% 
+    mutate(illness=reorder(illness,-n)) %>%
+    ggplot(aes(x=illness,y=n)) + geom_bar(stat="identity") + 
+    coord_flip() + labs(x="",y="Number of patients")
+```
+
+### Which illnesses co-occur in patients most often?
+
+```{r}
+co_illness <- rename(patient_illness, illness1=illness) %>%
+    inner_join(rename(patient_illness, illness2=illness), by="Patient_ID") %>%
+    count(illness1,illness2) %>% ungroup()
+
+ggplot(co_illness, aes(x=reorder(illness1,-n), y=reorder(illness2,-n), fill=log10(n))) +    
+    geom_tile(color="black") + coord_fixed() +
+    scale_fill_viridis() +
+    theme_minimal() + theme( axis.text.x=element_text(angle=90,vjust=0.5,hjust=1) ) +
+    labs(x="",y="",fill="log10\nnumber of\npatients")
+```
+
+### Illness by gender
+
+```{r}
+illness_gender <- patient_illness %>%
+    inner_join(filter(patients, gender != "U"), by="Patient_ID") %>%
+    count(gender, illness) %>% ungroup()
+
+illness_gender %>%
+    mutate(
+        illness=reorder(illness,-n),
+        n=ifelse(gender=="M",-n,n)) %>%
+    ggplot(aes(x=illness,y=n,fill=gender)) + geom_bar(stat="identity") + 
+    coord_flip() + labs(x="",y="Number of patients",fill="Gender") + ylim(c(-1.75e5,1.75e5))
+```
+
+### Illness by age
+
+What is the median age for each illness?
+
+```{r}
+illness_age <- patient_illness %>%
+    inner_join(filter(patients, !is.na(age)), by="Patient_ID") %>%
+    count(age, illness) %>% ungroup()
+
+median_ages <- illness_age %>% 
+    group_by(illness) %>% 
+    summarize(median_age=median(rep(age,n))) %>% 
+    arrange(median_age)
+
+median_ages
+```
+
+```{r}
+illness_age %>% 
+    mutate(illness=factor(illness,median_ages$illness)) %>%
+    ggplot(aes(x=age,y=n)) + geom_bar(stat="identity") + 
+    facet_grid(illness~.,scales="free_y") + labs(y="Number of patients", x="Age") +
+    theme(strip.text.y = element_text(angle=0))
+```
+
+
+
+
