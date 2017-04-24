@@ -1,6 +1,10 @@
 # This will create an sqlite database called MelbDatathon2017.sqlite
 # in the your current project directory
 library(sqldf)
+library(RMySQL)
+library(DBI)
+library(readr)
+library(dplyr)
 db <- dbConnect(SQLite(), dbname="MelbDatathon2017.sqlite")
 p1 <- read_tsv("Transactions/patients_1.txt", 
                col_types="iiiiccccciiiidddiii")
