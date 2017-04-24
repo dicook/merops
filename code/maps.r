@@ -23,17 +23,18 @@ library(ggplot2)
 library(ggthemes)
 library(dplyr)
 #nat_map <- ggplot2::fortify(sFsmall)
-nat_map <- ggplot2::fortify(sFsmall)
+nat_map <- ggplot2::fortify(sF)
 head(nat_map)
 nat_map$group <- paste("g",nat_map$group,sep=".")
 nat_map$piece <- paste("p",nat_map$piece,sep=".")
 nat_map <- left_join(nat_map, map_data)
-nat_map %>% select(POA_CODE) %>% distinct()
+#nat_map %>% select(POA_CODE) %>% distinct()
 ggplot(data=map_data) +
   geom_map(map=nat_map, aes(map_id=id)) +
   expand_limits(x=nat_map$long, y=nat_map$lat) 
 
 # Read in populations
+# Data from http://www.abs.gov.au/ausstats/abs@.nsf/DetailsPage/2033.0.55.0012011?OpenDocument
 library(readr)
 pop <- read_csv("postcode_population.csv", 
                 col_types="cddddddddd")

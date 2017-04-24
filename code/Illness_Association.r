@@ -13,7 +13,7 @@ patient_drug <- tbl(md,"Transactions") %>%
   count(Patient_ID, Drug_ID) %>%
   collect(n=Inf) 
 
-patient_illness <- inner_join(ungroup(patient_drug), drug_illness, by="Drug_ID") %>%
+ patient_illness <- inner_join(ungroup(patient_drug), drug_illness, by="Drug_ID") %>%
   distinct(Patient_ID, illness)
 
 co_illness <- rename(patient_illness, illness1=illness) %>%
