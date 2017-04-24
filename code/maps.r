@@ -3,6 +3,10 @@
 #sF <- readShapeSpatial(shapeFile)
 #class(sF)
 
+# Download the ESRI format data 
+# (Postal Areas ASGS Non ABS Structures Ed 2011 Digital Boundaries in ESRI Shapefile Format ) 
+# from http://www.abs.gov.au/AUSSTATS/abs@.nsf/DetailsPage/1270.0.55.003July%202011?OpenDocument
+# Unzip and rename the folder AUST_postcodes
 library(rgdal)
 sF <- readOGR(dsn="AUST_postcodes", layer="POA_2011_AUST")
 
