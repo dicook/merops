@@ -1,7 +1,7 @@
 # This will create an sqlite database called MelbDatathon2017.sqlite
 # in the your current project directory
 library(sqldf)
-library(RMySQL)
+#library(RMySQL)
 library(DBI)
 library(readr)
 library(dplyr)
@@ -15,6 +15,17 @@ for (i in 2:50) {
   dbWriteTable(conn=db, name="Transactions", value=p1, append=TRUE)
   cat(i,"\n")
 }
+
+# This data was distributed in a second .zip file
+for (i in 1:50) {
+  nm <- paste0("MISSING_TRANSACTIONS/missing_patients_",i,".txt")
+  #Slightly different format: IsDeferredScript given as True/False
+  p1 <- read_tsv(nm, col_types="iiiicccccliiidddiii") %>%
+      mutate(IsDeferredScript = as.integer(IsDeferredScript))
+  dbWriteTable(conn=db, name="Transactions", value=p1, append=TRUE)
+  cat(i,"\n")
+}
+
 dbListTables(db)
 dbListFields(db, "Transactions")
 #dbRemoveTable(db, "Transactions")
