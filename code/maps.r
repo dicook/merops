@@ -103,3 +103,30 @@ ggplot(data=nat_map_pop) +
   geom_point(data=nat_data_cart2, aes(x=x, y=y), size=1, alpha=0.4,
              colour="#f0027f", inherit.aes=FALSE) +
   theme_map() + coord_equal()
+
+# Group transactions by store postcode
+library(sqldf)
+md <- src_sqlite('MelbDatathon2017.sqlite', create=FALSE)
+ts <- tbl(md, 'Transactions')
+stores <- tbl(md, 'Stores') %>% collect()
+colnames(stores) = c('Store_ID', 'StateCode', 'postcode', 'IsBannerGroup')
+stores <- mutate(stores, Store_ID = as.numeric(Store_ID))
+tstore <- ts %>% group_by(Store_ID) %>% summarise(purchases=n(), totalSpend=sum(PatientPrice_Amt)) %>% collect()
+store_postcode <- left_join(stores, tstore) %>% group_by(postcode) %>% summarise(numPurchases=sum(purchases), totalSpend=sum(totalSpend), numStores=n())
+store_pop <- left_join(pop, store_postcode, by=c('POA_CODE' = 'postcode')) %>% mutate(totalSpend = ifelse(is.na(totalSpend), 0, totalSpend),
+                                                                                      numPurchases = ifelse(is.na(numPurchases), 0, numPurchases),
+                                                                                      numStores = ifelse(is.na(numStores), 0, numStores),
+                                                                                      SpendPer1000 = totalSpend/Pop*1000)
+
+nat_map_store <- left_join(nat_map, store_pop)
+
+ggplot(data=nat_map_store) +
+  geom_map(map=nat_map_store, aes(map_id=id, fill=SpendPer1000)) +
+  expand_limits(x=nat_map_pop$long, y=nat_map_pop$lat) +
+  theme_map()
+
+# Top store suburb is a commerical district in West Newcastle
+head(arrange(store_pop, desc(SpendPer1000)))
+
+# Expenditure per 1000 people decreases as suburb wealth proxy increases
+ggplot(data=filter(store_pop, numStores>0)) + geom_point(aes(x=SES_Adv_Score, y=SpendPer1000, colour=factor(numStores)))
