@@ -45,6 +45,8 @@ ggplot(data=nat_map_pop) +
   expand_limits(x=nat_map_pop$long, y=nat_map_pop$lat) +
   theme_map()
 
+# Save map, so it doesn't need re-creating each time
+write_csv(nat_map_pop, path="nat_map_pop.csv")
 #install.packages('tilegramsR')
 #library(tilegramsR)
 # None for Oz, and have to create
@@ -62,6 +64,7 @@ centroid <- function(i, polys) {
 centroids <- seq_along(polys) %>% purrr::map_df(centroid, polys=polys)
 head(centroids)
 map_data <- data.frame(map_data, centroids)
+write_csv(map_data, path="map_data.csv")
 
 ggplot(data=nat_map_pop) +
   geom_map(map=nat_map_pop, aes(map_id=id), fill="grey90", colour="white") +
@@ -113,11 +116,12 @@ colnames(stores) = c('Store_ID', 'StateCode', 'postcode', 'IsBannerGroup')
 stores <- mutate(stores, Store_ID = as.numeric(Store_ID))
 tstore <- ts %>% group_by(Store_ID) %>% summarise(purchases=n(), totalSpend=sum(PatientPrice_Amt)) %>% collect()
 store_postcode <- left_join(stores, tstore) %>% group_by(postcode) %>% summarise(numPurchases=sum(purchases), totalSpend=sum(totalSpend), numStores=n())
-store_pop <- left_join(pop, store_postcode, by=c('POA_CODE' = 'postcode')) %>% mutate(totalSpend = ifelse(is.na(totalSpend), 0, totalSpend),
-                                                                                      numPurchases = ifelse(is.na(numPurchases), 0, numPurchases),
-                                                                                      numStores = ifelse(is.na(numStores), 0, numStores),
-                                                                                      SpendPer1000 = totalSpend/Pop*1000)
-
+store_pop <- left_join(pop, store_postcode, 
+                       by=c('POA_CODE' = 'postcode')) %>% 
+  mutate(totalSpend = ifelse(is.na(totalSpend), 0, totalSpend),
+  numPurchases = ifelse(is.na(numPurchases), 0, numPurchases),
+  numStores = ifelse(is.na(numStores), 0, numStores),
+  SpendPer1000 = totalSpend/Pop*1000)
 nat_map_store <- left_join(nat_map, store_pop)
 
 ggplot(data=nat_map_store) +
@@ -126,7 +130,40 @@ ggplot(data=nat_map_store) +
   theme_map()
 
 # Top store suburb is a commerical district in West Newcastle
-head(arrange(store_pop, desc(SpendPer1000)))
+head(arrange(store_pop, desc(SpendPer1000))) %>% 
+  select(POA_CODE, numPurchases, totalSpend, numStores, SpendPer1000)
 
 # Expenditure per 1000 people decreases as suburb wealth proxy increases
-ggplot(data=filter(store_pop, numStores>0)) + geom_point(aes(x=SES_Adv_Score, y=SpendPer1000, colour=factor(numStores)))
+ggplot(data=filter(store_pop, numStores>0)) + 
+  geom_point(aes(x=SES_Adv_Score, y=SpendPer1000))
+
+# Find post code location
+library(ggmap)
+get_lonlat <- function(state, pc) {
+  loc <- geocode(paste0(state, ", ", pc))
+  return(loc)
+}
+l <- get_lonlat("NSW", "2302")
+
+library(RCurl)
+library(jsonlite)
+rev_geoCode <- function(lat, lon, verbose=FALSE) {
+  if (verbose) cat(address,"\n")
+  u <- url(lat, lon)
+  doc <- getURL(u)
+  x <- jsonlite::fromJSON(doc, flatten = FALSE)
+  if (x$status == "OK") {
+    n <- length(x$results$address_components[[1]]$short_name)
+    postcode <- x$results$address_components[[1]]$short_name[n]
+    return(postcode)
+  } else {
+    return(NA)
+  }
+}
+url <- function(lat, lon, return.call = "json") {
+  root <- "http://maps.google.com/maps/api/geocode/"
+  u <- paste(root, return.call, "?latlng=", lat, ",", lon, sep = "")
+  return(URLencode(u))
+}
+getURL(url(l$lat, l$lon))
+rev_geoCode(l[1], l[2])
