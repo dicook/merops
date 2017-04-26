@@ -105,7 +105,8 @@ ggplot(data=nat_map_pop) +
   geom_map(map=nat_map_pop, aes(map_id=id), fill="grey90", colour="white") +
   geom_point(data=nat_data_cart2, aes(x=x, y=y), size=1, alpha=0.4,
              colour="#f0027f", inherit.aes=FALSE) +
-  theme_map() + coord_equal()
+  theme_map() + coord_equal() +
+  expand_limits(x=nat_map$long, y=nat_map$lat)
 
 # Group transactions by store postcode
 library(sqldf)
@@ -167,3 +168,31 @@ url <- function(lat, lon, return.call = "json") {
 }
 getURL(url(l$lat, l$lon))
 rev_geoCode(l[1], l[2])
+
+ggplot(data=filter(store_pop, numStores>0)) + geom_point(aes(x=SES_Adv_Score, y=SpendPer1000, colour=factor(numStores)))
+
+
+# Redo grouping by patient postcode
+patients <- tbl(md, 'Patients') %>% collect()
+colnames(patients) <- c('Patient_ID', 'gender', 'year_of_birth', 'postcode')
+patients$Patient_ID = as.numeric(patients$Patient_ID)
+tpatients <- ts %>% group_by(Patient_ID) %>% summarise(purchases=n(), totalSpend=sum(PatientPrice_Amt)) %>% collect()
+patient_postcode <- left_join(patients, tpatients) %>% group_by(postcode) %>% 
+  summarise(numPurchases=sum(purchases), totalSpend=sum(totalSpend), numPatients=n())
+patient_pop <- left_join(pop, patient_postcode, by = c('POA_CODE' = 'postcode')) %>% 
+  mutate(totalSpend = ifelse(is.na(totalSpend), 0, totalSpend),
+         numPurchases = ifelse(is.na(numPurchases), 0, numPurchases),
+         numPatients = ifelse(is.na(numPatients), 0, numPatients),
+         SpendPer1000 = totalSpend/Pop*1000,
+         SpendPerTrans = ifelse(numPurchases==0, 0, totalSpend/numPurchases),
+         SpendPerPatient = ifelse(numPatients==0, 0, totalSpend/numPatients),
+         PatientsPer1000 = numPatients/Pop*1000)
+
+nat_map_pat <- left_join(nat_map, patient_pop)
+ggplot(data=nat_map_store) +
+  geom_map(map=nat_map_pat, aes(map_id=id, fill=SpendPer1000)) +
+  expand_limits(x=nat_map_pop$long, y=nat_map_pop$lat) +
+  theme_map()
+
+library(GGally)
+ggpairs(select(patient_pop, SES_Adv_Decile, SpendPer1000, PatientsPer1000, SpendPerPatient, SpendPerTrans))
