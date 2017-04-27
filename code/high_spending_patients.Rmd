@@ -1,0 +1,70 @@
+---
+title: "High Spending Patients Investigation"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Originally I grouped the data by postcode and found that there was a postcode with a small population but a large expenditure driven by one patient. This patient is ID 524998, from Flinder's Island. There is one nursing home here with only nine beds, so it is more likely to be one person than a large group all entered under the same ID.
+
+Not grouping the transactions by postcodes lets us find patients from more populated areas with a large expenditure. The 24 patients that all personally spent over $20,000 are analysed. These patients typically buy large amounts of expensive drugs with little to no government rebates.
+```{r spending, warning=FALSE, message=FALSE}
+library(sqldf)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+md <- src_sqlite('../MelbDatathon2017.sqlite', create=FALSE)
+ts <- tbl(md, 'Transactions')
+chronic <- tbl(md, 'ChronicIllness') %>% collect() %>% mutate(MasterProductID = as.numeric(MasterProductID),
+                    ChronicIllness = ifelse(ChronicIllness == 'Chronic Obstructive Pulmonary Disease (COPD)', 'COPD', ChronicIllness))
+patients <- tbl(md, 'Patients') %>% collect()
+colnames(patients) <- c('Patient_ID', 'gender', 'year_of_birth', 'postcode')
+patients$Patient_ID <- as.numeric(patients$Patient_ID)
+tpatients <- ts %>% group_by(Patient_ID) %>% summarise(purchases=n(), totalSpend=sum(PatientPrice_Amt)) %>% collect()
+highspend <- filter(tpatients, totalSpend > 20000)
+hightrans <- ts %>% filter(Patient_ID %in% highspend$Patient_ID) %>% collect()
+
+ggplot(hightrans) + geom_histogram(aes(PatientPrice_Amt)) + facet_wrap(~factor(Patient_ID), scale='free', ncol=4) 
+ggplot(hightrans) + geom_histogram(aes(GovernmentReclaim_Amt)) + facet_wrap(~factor(Patient_ID), scale='free', ncol=4) 
+```
+
+88% of the total medicine cost was paid for by these customers, while only 22% of the total cost across all transactions was paid for by the patients.
+```{r costratio, warning=FALSE, message=FALSE}
+spendSummary <- ts %>% summarise(pt = sum(PatientPrice_Amt), gov = sum(GovernmentReclaim_Amt)) %>% collect()
+spendRatio = data.frame(Top24 = sum(hightrans$PatientPrice_Amt) / (sum(hightrans$GovernmentReclaim_Amt, na.rm=TRUE)+sum(hightrans$PatientPrice_Amt)), 
+                        AllTransactions = spendSummary[1]/sum(spendSummary))
+spendRatio
+```
+
+The most expensive Chronic Illness for these people was Epilepsy.
+
+```{r expensiveillness, warning=FALSE, message=FALSE}
+highillness <- left_join(hightrans, chronic, by=c('Drug_ID' = 'MasterProductID'))
+ggplot(highillness) + geom_boxplot(aes(y=PatientPrice_Amt, x=ChronicIllness)) + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+However for the whole dataset Urology drugs had the highest average Patient Purchase Price
+```{r allpatients, warning=FALSE, message=FALSE}
+drugHighcost <- ts %>% group_by(Drug_ID) %>% summarise(spend = sum(PatientPrice_Amt), quantity=n()) %>% 
+  mutate(avgcost = spend/quantity) %>% collect()
+expensiveIllness <- left_join(drugHighcost, chronic, by=c('Drug_ID' = 'MasterProductID'))
+
+ggplot(filter(expensiveIllness, ChronicIllness != '<NA>')) + geom_boxplot(aes(x=ChronicIllness, y=avgcost)) + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+  
+```
+
+We can subtract the average cost of each drug bought from the price paid by the >$20,000 patients.
+```{r expensiveminusmean, warning=FALSE, message=FALSE}
+highillness <- left_join(highillness, expensiveIllness)
+ggplot(highillness) + geom_boxplot(aes(y=PatientPrice_Amt-avgcost, x=ChronicIllness)) + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+Most of our 24 patients spent significantly more than the expected cost of their medication. 
+```{r overpay, warning=FALSE, message=FALSE}
+overpay <- highillness %>% group_by(Patient_ID) %>% summarise(expectedSpend = sum(avgcost)) %>% 
+  left_join(highspend) %>% mutate(overSpend = totalSpend - expectedSpend) %>% select(-purchases)
+ggplot(overpay) + geom_histogram(aes(overSpend), bins=20)
+
+```
