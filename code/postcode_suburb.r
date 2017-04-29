@@ -29,3 +29,14 @@ links <- data_frame(postcode_row=seq_along(result), suburb_row=result) %>%
 
 write_csv(links, "postcode_suburb.csv")
 
+
+# It will also be useful to have an outline of Australia
+
+# Between suburbs and postcodes we appear to cover Australia
+boundary <- gUnion(suburb_shapes, postcode_shapes)
+sboundary <- gSimplify(boundary, tol=0.01)
+fortify(sboundary) %>% filter(long >= 110, long <= 155) %>%
+    select(piece, long, lat) %>% 
+    write_csv("australia_map.csv")
+
+
