@@ -191,38 +191,90 @@ postcode_illness_ts <- postcode_illness %>%
 # devtools::install_github("earowang/tscognostics")
 library(tscognostics)
 library(plotly)
+
+range01 <- function(x) { # normalise cognostics b/t 0 and 1
+  rng <- range(x, na.rm = TRUE)
+  (x - rng[1]) / (rng[2] - rng[1])
+}
+
 cogs_ts <- postcode_illness_ts %>% 
-  map(tsmeasures) %>% 
-  map(as.data.frame) %>% 
-  map(select, -c(relativeNA, fixedNA))
+  map(tsmeasures)
+cogs_ts_scaled <- cogs_ts %>% 
+  map(~ apply(., 2, range01)) %>% # normalised with mean of 0, var of 1
+  map(as.data.frame)
 illness_names <- names(cogs_ts)
 postcode_2 <- cogs_ts %>% 
   map(row.names)
 
-cogs_df <- cogs_ts %>% 
+cogs_df <- cogs_ts_scaled %>% 
   map2(illness_names, ~ mutate(.x, ChronicIllness = .y)) %>% 
   map2(postcode_2, ~ mutate(.x, Postcode = .y)) %>% 
   bind_rows() %>% 
+  mutate(
+    ChronicIllness = if_else(
+      ChronicIllness == "Chronic Obstructive Pulmonary Disease (COPD)",
+      "COPD", ChronicIllness)
+  ) %>% 
   gather(Cognostics, Value, ACF1:trough) %>% 
-  unnest(Value) %>% 
   as_tibble()
 
 cogs_df %>% 
-  # filter(ChronicIllness == "Diabetes") %>% 
-  ggplot(aes(x = "1", y = Value, group = Postcode)) +
-  geom_jitter() +
-  facet_grid(ChronicIllness ~ Cognostics, scales = "free_y")
-
-cogs_df %>% 
-  filter(Cognostics == "spikiness") %>% 
-  ggplot(aes(x = "1", y = Value, group = Postcode)) +
-  geom_jitter() +
-  facet_wrap(~ ChronicIllness, scales = "free_y")
+  ggplot(aes(x = Cognostics, y = Value, group = Postcode)) +
+  geom_jitter(size = 0.2) +
+  facet_grid(ChronicIllness ~ .)
 ggplotly()
 
+top1_trend <- cogs_df %>%
+  filter(Cognostics == "trend") %>%
+  group_by(ChronicIllness) %>% 
+  filter(row_number(Value) == n())
+
 dispense_chronic_bypostcode_qtr %>% 
-  filter(postcode == "4105", ChronicIllness == "Diabetes") %>% 
+  filter(postcode %in% top1_trend$Postcode) %>% 
   ggplot(aes(x = Dispense_YrQtr, y = trans_count)) +
   geom_line() +
   geom_point() +
+  facet_grid(ChronicIllness ~ postcode, scales = "free_y") +
   scale_x_yearqtr(format = "%Y Q%q", n = 5)
+
+dispense_chronic_bypostcode_qtr %>% 
+  filter(postcode == "4350") %>% # highest in depression
+  ggplot(aes(x = Dispense_YrQtr, y = trans_count)) +
+  geom_line() +
+  geom_point() +
+  facet_grid(ChronicIllness ~ ., scales = "free_y") +
+  scale_x_yearqtr(format = "%Y Q%q", n = 5)
+
+top1_entropy <- cogs_df %>%
+  filter(Cognostics == "entropy") %>%
+  group_by(ChronicIllness) %>% 
+  filter(row_number(Value) == 1)
+
+dispense_chronic_bypostcode_qtr %>% 
+  filter(postcode %in% top1_entropy$Postcode) %>% 
+  ggplot(aes(x = Dispense_YrQtr, y = trans_count)) +
+  geom_line() +
+  geom_point() +
+  facet_grid(ChronicIllness ~ postcode, scales = "free_y") +
+  scale_x_yearqtr(format = "%Y Q%q", n = 5)
+
+dispense_chronic_bypostcode_qtr %>% 
+  filter(postcode == "3630") %>% # lowest in Urology
+  ggplot(aes(x = Dispense_YrQtr, y = trans_count)) +
+  geom_line() +
+  geom_point() +
+  facet_grid(ChronicIllness ~ ., scales = "free_y") +
+  scale_x_yearqtr(format = "%Y Q%q", n = 5)
+
+library(ggfortify)
+library(gridExtra)
+cogs_pca <- cogs_ts_scaled %>% 
+  map(~ prcomp(., center = FALSE))
+p_cogs_pca <- cogs_pca %>% 
+  map(~ autoplot(., loadings = TRUE, loadings.label = TRUE))
+grid.arrange(
+  p_cogs_pca[[1]], p_cogs_pca[[2]], p_cogs_pca[[3]], p_cogs_pca[[4]],
+  p_cogs_pca[[5]], p_cogs_pca[[6]], p_cogs_pca[[7]], p_cogs_pca[[8]],
+  p_cogs_pca[[9]], p_cogs_pca[[10]], p_cogs_pca[[11]],
+  nrow = 3, ncol = 4
+)
