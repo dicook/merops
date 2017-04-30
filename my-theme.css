@@ -1,0 +1,23 @@
+.title-slide {
+  background-image: url(transparent_merops.png);
+  background-size: cover;
+  color: #0D4F8B;
+}
+.title-slide h1 {
+  text-shadow: none;
+  color: #006698;
+  margin-top: -70px;
+}
+.title-slide h2, .title-slide h3 {
+  text-shadow: none;
+  color: #0cb577;
+  line-height: 1.5em;
+}
+.title-slide .remark-slide-number {
+  display: none;
+}
+.inverse {
+  background-image: url(transparent_merops.png);
+  background-size: cover;
+  color: #0D4F8B;
+}
