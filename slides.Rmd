@@ -1,0 +1,37 @@
+---
+title: "Spatio-temporal effects in drug sales, <br>in association with demographics and disease"
+author: "merops: Monash Experts in R, <br> Organising Pharmaceutical Sales"
+date: "Paul Harrison, Earo Wang, <br> Nat Tomasetti, Di Cook, Stuart Lee"
+output:
+  xaringan::moon_reader:
+    lib_dir: libs
+    css: ["default", "my-theme.css"]
+    nature:
+      highlightStyle: github
+      highlightLines: true
+      countIncrementalSlides: false
+---
+
+
+```{r setup, include=FALSE}
+options(htmltools.dir.version = FALSE)
+```
+
+background-image: url(transparent_merops.png)
+background-position: center top
+class: center, bottom
+# Outline
+
+- Temporal trends in drug sales
+- Spatial distribution
+- How gender, age, and disease are related to sales
+- Data processing
+- Weird findings
+
+---
+
+# Thanks!
+
+Slides created via the R package [**xaringan**](https://github.com/yihui/xaringan).
+
+The chakra comes from [remark.js](https://remarkjs.com), [**knitr**](http://yihui.name/knitr), and [R Markdown](https://rmarkdown.rstudio.com).
