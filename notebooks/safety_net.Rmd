@@ -1,0 +1,199 @@
+---
+title: "The PBS safety net"
+output: html_notebook
+---
+
+```{r message=F, warning=F}
+library(tidyverse)
+library(lubridate)
+library(viridis)
+```
+
+```{r}
+md <- src_sqlite("MelbDatathon2017.sqlite", create=FALSE)
+# db_create_index(md$con, "Transactions", c("Patient_ID"))
+
+# Use patients with records through 2016
+max_id <- 279200
+
+oz_pieces <- read_csv("../australia_map.csv")
+oz_geom <- geom_polygon(data=oz_pieces, 
+    aes(group=piece,x=long,y=lat), inherit.aes=FALSE, fill="#cccccc")
+# ggplot() + oz_geom
+
+stores <- tbl(md,"Stores") %>% collect(n=Inf) %>%
+    mutate(Store_ID = as.integer(Store_ID))
+
+drug_illness <- tbl(md,"ChronicIllness") %>%
+    transmute(illness=ChronicIllness, Drug_ID=as.integer(MasterProductID)) %>%
+    collect(n=Inf) %>%
+    mutate(illness=ifelse(illness=="Chronic Obstructive Pulmonary Disease (COPD)","COPD",illness))
+
+drugs <- tbl(md,"Drugs") %>%
+    rename(Drug_ID=MasterProductID) %>%
+    mutate(Drug_ID=as.integer(Drug_ID)) %>%
+    collect(n=Inf) %>%
+    left_join(drug_illness, by="Drug_ID")
+
+stores <- tbl(md,"Stores") %>%
+    mutate(Store_ID=as.integer(Store_ID)) %>%
+    collect(n=Inf)
+
+desc <- function(names) {
+    if (length(names) > 3) names <- c(head(names,2),"...")
+    paste(names, collapse="\n")
+}
+postcode_suburb <- read_csv("../postcode_suburb.csv") %>%
+    group_by(postcode) %>% summarize(label=desc(suburb))
+
+postcodes <- read_csv("../postcode_centroids.csv") %>%
+    select(postcode=POA_CODE, area=SQKM, long_c, lat_c) %>%
+    left_join(postcode_suburb,by="postcode")
+
+patients <- tbl(md,"Patients") %>% collect(n=Inf) %>%
+    mutate(
+        Patient_ID = as.integer(Patient_ID),
+        age=ifelse(year_of_birth==1900,NA,2017-year_of_birth))
+
+records <- tbl(md,"Transactions") %>%
+    filter(Patient_ID <= max_id) %>%
+    distinct(Patient_ID, Drug_ID, Store_ID, Dispense_Week, 
+        PatientPrice_Amt, WholeSalePrice_Amt, GovernmentReclaim_Amt) %>%
+    collect(n=Inf)
+
+records <- records %>%
+    mutate(day=as.integer(ymd(Dispense_Week))) %>%
+    left_join(dplyr::select(drugs, Drug_ID, illness), by="Drug_ID") %>%
+    left_join(dplyr::select(stores, Store_ID, postcode), by="Store_ID")
+
+
+df <- records %>%
+    mutate(
+        Dispense_Week = ymd(Dispense_Week),
+        year=year(Dispense_Week)) %>%
+    filter(
+        !is.na(PatientPrice_Amt), 
+        !is.na(WholeSalePrice_Amt),
+        year >= 2011,
+        year <= 2016) %>%
+    group_by(Patient_ID, year) %>%
+    mutate(
+        safety_net = PatientPrice_Amt == 0,
+        concession = any(
+            PatientPrice_Amt > 0 &
+            PatientPrice_Amt < WholeSalePrice_Amt & 
+            WholeSalePrice_Amt > 10
+        ) & !any(
+            PatientPrice_Amt < WholeSalePrice_Amt &
+            PatientPrice_Amt > 10
+        )
+    ) %>%
+    ungroup() %>%
+    mutate(
+        safety_net=factor(ifelse(safety_net,"Safety net","Co-payment"),
+            c("Safety net", "Co-payment")),
+        concession=factor(ifelse(concession,"Concession","Non-concession"))
+    )
+```
+
+## A striking yearly pattern in purchases over time
+
+Only patients with complete 2016 transactions have been used. I omit data from 2017, as our interest here will be in yearly trends.
+
+```{r}
+df %>%
+count(Dispense_Week) %>%
+ggplot(aes(x=Dispense_Week, y=n)) + geom_col(width=7) +
+    labs(x="", y="Number of prescription purchases")
+```
+
+## The pattern appears to be due to the PBS safety net
+
+The Pharmaceutical Benefits Scheme is a co-payment system -- the patient pays up to some amount for a medicine and the government pays the rest. However if a patient has paid beyond a certain amount they hit the "safety net" and the government pays the full amount for medications for the rest of the year.
+
+Concession card holders currently pay \$6.30 per purchase but nothing beyond a total of \$378 each year. Concession cards are given to various people including the elderly, veterans, unemployed people, and disabled people.
+
+Non-concession card holders currently pay \$38.80 per purchase but nothing beyond a total of \$1,494.90 each year.
+
+Slightly more may be paid for brands more expensive than the cheapest for a drug.
+
+I've inferred concession card holding, for each patient in each year, if a patient has purchased medicine with wholesale price more than \$10 but where the government has made a contribution the patient has always paid less than \$10.
+
+```{r}
+df %>%
+#mutate(Dispense_Week = floor_date(Dispense_Week, unit="6 months") %m+% months(3)) %>%
+count(Dispense_Week, safety_net, concession) %>%
+ungroup() %>%
+ggplot(aes(x=Dispense_Week, y=n, fill=safety_net)) + geom_col(width=7) +
+    facet_grid(concession ~ .) + 
+    labs(fill="", x="", y="Number of prescription purchases")
+```
+
+Binning by half-year shows the pattern more clearly. When people have to pay, they purchase less medicine.
+
+```{r}
+df %>%
+mutate(Dispense_Week = floor_date(Dispense_Week, unit="6 months") %m+% months(3)) %>%
+count(Dispense_Week, safety_net, concession) %>%
+ungroup() %>%
+ggplot(aes(x=Dispense_Week, y=n, fill=safety_net)) + geom_col(width=100) +
+    facet_grid(concession ~ .) + 
+    labs(fill="", x="", y="Number of prescription purchases")
+```
+
+
+## Chronic illness purchases are also lower early in the year
+
+Some people seem to be rationing their use of such things as anti-depressants, heart medication, asthma or bronchitis medication, diabetes medication, and medication for high cholesterol.
+
+```{r fig.height=8, fig.width=5}
+df %>%
+filter(!is.na(illness)) %>%
+#mutate(Dispense_Week = floor_date(Dispense_Week, unit="6 months") %m+% months(3)) %>%
+count(illness, Dispense_Week, safety_net, concession) %>%
+ungroup() %>%
+ggplot(aes(x=Dispense_Week, y=n, fill=safety_net)) + geom_col(width=7) +
+    facet_grid(illness ~ concession, scales="free_y") + 
+    labs(fill="", x="", y="Number of prescription purchases") +
+    theme(strip.text.y = element_text(angle=0))
+```
+
+
+```{r fig.height=8, fig.width=5}
+df %>%
+filter(!is.na(illness)) %>%
+mutate(Dispense_Week = floor_date(Dispense_Week, unit="6 months") %m+% months(3)) %>%
+count(illness, Dispense_Week, safety_net, concession) %>%
+ungroup() %>%
+ggplot(aes(x=Dispense_Week, y=n, fill=safety_net)) + geom_col(width=100) +
+    facet_grid(illness ~ concession, scales="free_y") + 
+    labs(fill="", x="", y="Number of prescription purchases") +
+    theme(strip.text.y = element_text(angle=0))
+```
+
+This doesn't seem like an ideal way to manage chronic conditions, so there may be a case for modifying how the PBS safety net works.
+
+
+## Where is the safety net used?
+
+```{r}
+p <- df %>%
+    group_by(postcode) %>%
+    summarize(n=n(), prop_safety_net=mean(safety_net == "Safety net")) %>%
+    filter(n >= 100) %>%
+    inner_join(postcodes, by="postcode") %>%
+    ggplot(aes(x=long_c,y=lat_c,size=n,color=prop_safety_net)) + 
+        oz_geom + coord_fixed() + 
+        geom_point() +
+        scale_color_viridis() +
+        labs(x="",y="",size="Number of\npurchases", 
+            color="Proportion of\npurchases using\nsafety net")
+
+p + 
+    scale_y_continuous(limits=c(-38.5,-37.5),oob=function(a,b)a) +
+    scale_x_continuous(limits=c(144,145.5),oob=function(a,b)a)
+```
+
+
+
+
