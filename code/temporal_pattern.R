@@ -278,3 +278,129 @@ grid.arrange(
   p_cogs_pca[[9]], p_cogs_pca[[10]], p_cogs_pca[[11]],
   nrow = 3, ncol = 4
 )
+
+## Look at purchase amout over time
+purchase <- trans %>% 
+  group_by(Dispense_Week) %>% 
+  summarise(Amt = sum(PatientPrice_Amt)) %>% 
+  collect(n = Inf)
+
+purchase <- purchase %>% 
+  mutate(
+    Dispense_Week = as_date(Dispense_Week),
+    Dispense_Year = year(Dispense_Week),
+    Dispense_Month = month(Dispense_Week, label = TRUE),
+    Dispense_Qtr = quarter(Dispense_Week)
+  ) %>% 
+  filter(Dispense_Year >= 2011, Dispense_Year < 2016)
+
+# Quarterly series
+purchase_qtr <- purchase %>% 
+  filter(Dispense_Year >= 2011, Dispense_Year < 2016) %>% 
+  group_by(Dispense_Year, Dispense_Qtr) %>% 
+  summarise(trans_amt = sum(Amt, na.rm = TRUE)) %>% 
+  mutate(Dispense_YrQtr = as.yearqtr(
+    paste(Dispense_Year, Dispense_Qtr, sep = " Q"), "%Y Q%q")
+  )
+
+purchase_qtr %>% 
+  ggplot(aes(x = Dispense_YrQtr, y = trans_amt)) +
+  geom_line() +
+  geom_point() +
+  scale_x_yearqtr(format = "%Y Q%q", n = 5)
+
+# By chronic illness or not
+illness <- illness_db %>% collect(n = Inf)
+illness <- illness %>% mutate(MasterProductID = as.integer(MasterProductID))
+chronic_drugs <- illness$MasterProductID
+purchase_bychronic <- trans %>% 
+  mutate(Chronic = if_else(Drug_ID %in% chronic_drugs, "Y", "N")) %>% 
+  group_by(Chronic, Dispense_Week) %>% 
+  summarise(Amt = sum(PatientPrice_Amt)) %>% 
+  collect(n = Inf)
+
+purchase_bychronic <- purchase_bychronic %>% 
+  mutate(
+    Dispense_Week = as_date(Dispense_Week),
+    Dispense_Year = year(Dispense_Week),
+    Dispense_Month = month(Dispense_Week, label = TRUE),
+    Dispense_Qtr = quarter(Dispense_Week)
+  ) %>% 
+  filter(Dispense_Year >= 2011, Dispense_Year < 2016)
+
+purchase_bychronic_qtr <- purchase_bychronic %>% 
+  group_by(Chronic, Dispense_Year, Dispense_Qtr) %>% 
+  summarise(trans_amt = sum(Amt, na.rm = TRUE)) %>% 
+  mutate(Dispense_YrQtr = as.yearqtr(
+    paste(Dispense_Year, Dispense_Qtr, sep = " Q"), "%Y Q%q")
+  )
+
+purchase_bychronic_qtr %>% 
+  ggplot(aes(x = Dispense_YrQtr, y = trans_amt)) +
+  geom_line() +
+  geom_point() +
+  facet_grid(Chronic ~ .) +
+  scale_x_yearqtr(format = "%Y Q%q", n = 5)
+
+# By different chronic illness
+purchase_chronic_dat <- trans %>% 
+  filter(Drug_ID %in% chronic_drugs) %>% 
+  collect(n = Inf)
+
+purchase_chronic <- purchase_chronic_dat %>% 
+  left_join(illness, by = c("Drug_ID" = "MasterProductID")) %>% 
+  group_by(ChronicIllness, Dispense_Week) %>% 
+  summarise(Amt = sum(PatientPrice_Amt)) %>% 
+  mutate(
+    Dispense_Week = as_date(Dispense_Week),
+    Dispense_Year = year(Dispense_Week),
+    Dispense_Month = month(Dispense_Week, label = TRUE),
+    Dispense_Qtr = quarter(Dispense_Week)
+  ) %>% 
+  filter(Dispense_Year >= 2011, Dispense_Year < 2016)
+
+purchase_chronic_qtr <- purchase_chronic %>% 
+  group_by(ChronicIllness, Dispense_Year, Dispense_Qtr) %>% 
+  summarise(trans_amt = sum(Amt, na.rm = TRUE)) %>% 
+  mutate(Dispense_YrQtr = as.yearqtr(
+    paste(Dispense_Year, Dispense_Qtr, sep = " Q"), "%Y Q%q")
+  )
+
+purchase_chronic_qtr %>% 
+  ggplot(aes(x = Dispense_YrQtr, y = trans_amt)) +
+  geom_line() +
+  geom_point() +
+  facet_grid(ChronicIllness ~ ., scales = "free_y") +
+  scale_x_yearqtr(format = "%Y Q%q", n = 5)
+
+# Look at chronic illness by gender
+patients <- patients_db %>% collect(n = Inf) %>% 
+  mutate(Patient_ID = as.integer(Patient_ID))
+purchase_chronic_full <- purchase_chronic_dat %>% 
+  left_join(illness, by = c("Drug_ID" = "MasterProductID")) %>% 
+  left_join(patients, by = "Patient_ID")
+
+purchase_chronic_bygender <- purchase_chronic_full %>% 
+  group_by(gender, ChronicIllness, Dispense_Week) %>% 
+  summarise(Amt = sum(PatientPrice_Amt)) %>% 
+  mutate(
+    Dispense_Week = as_date(Dispense_Week),
+    Dispense_Year = year(Dispense_Week),
+    Dispense_Month = month(Dispense_Week, label = TRUE),
+    Dispense_Qtr = quarter(Dispense_Week)
+  ) %>% 
+  filter(Dispense_Year >= 2011, Dispense_Year < 2016)
+
+purchase_chronic_bygender_qtr <- purchase_chronic_bygender %>% 
+  group_by(gender, ChronicIllness, Dispense_Year, Dispense_Qtr) %>% 
+  summarise(trans_amt = sum(Amt, na.rm = TRUE)) %>% 
+  mutate(Dispense_YrQtr = as.yearqtr(
+    paste(Dispense_Year, Dispense_Qtr, sep = " Q"), "%Y Q%q")
+  )
+
+purchase_chronic_bygender_qtr %>% 
+  ggplot(aes(x = Dispense_YrQtr, y = trans_amt)) +
+  geom_line() +
+  geom_point() +
+  facet_grid(ChronicIllness ~ gender, scales = "free_y") +
+  scale_x_yearqtr(format = "%Y Q%q", n = 5)
