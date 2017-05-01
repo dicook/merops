@@ -10,9 +10,11 @@
 library(rgdal)
 sF <- readOGR(dsn="AUST_postcodes", layer="POA_2011_AUST")
 
-library(rmapshaper)
-sFsmall <- ms_simplify(sF, keep=0.1) # use instead of thinnedSpatialPoly
+#library(rmapshaper)
+#sFsmall <- ms_simplify(sF, keep=0.1) # use instead of thinnedSpatialPoly
 
+sFsmall <- gSimplify(sF, tol=0.01)
+  
 map_data <- sF@data
 head(map_data)
 map_data$id <- rownames(map_data)

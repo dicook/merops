@@ -39,4 +39,4 @@ fortify(sboundary) %>% filter(long >= 110, long <= 155) %>%
     select(piece, long, lat) %>% 
     write_csv("australia_map.csv")
 
-
+map <- fortify(sboundary) 
