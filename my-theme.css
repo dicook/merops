@@ -1,3 +1,10 @@
+.inverse {
+  background-image: url(transparent_merops_small.png);
+  color: #006698;
+}
+.inverse h1 {
+  color: #006698;
+}
 .title-slide {
   background-image: url(transparent_merops.png);
   background-size: cover;
@@ -16,8 +23,4 @@
 .title-slide .remark-slide-number {
   display: none;
 }
-.inverse {
-  background-image: url(transparent_merops.png);
-  background-size: cover;
-  color: #0D4F8B;
-}
+

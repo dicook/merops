@@ -134,9 +134,9 @@ dispense_chronic_qtr <- dispense_chronic %>%
   )
 
 ```
-background-image: url(transparent_merops.png)
+background-image: url(transparent_merops_small.png)
 background-position: center top
-class: center, bottom
+class: left
 # Outline
 
 - Temporal trends in drug sales
@@ -193,3 +193,5 @@ Apotex sold 60 of 80 scripts in ... typical market share
 Slides created via the R package [**xaringan**](https://github.com/yihui/xaringan).
 
 The chakra comes from [remark.js](https://remarkjs.com), [**knitr**](http://yihui.name/knitr), and [R Markdown](https://rmarkdown.rstudio.com).
+
+Forest kingfisher photo by Gordon Fellows @AustralianParrotsandBirds
