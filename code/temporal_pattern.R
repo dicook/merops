@@ -172,6 +172,12 @@ dispense_chronic_bypostcode <- dispense_chronic_full %>%
   filter(Dispense_Year >= 2011, Dispense_Year < 2016)
 
 dispense_chronic_bypostcode_qtr <- dispense_chronic_bypostcode %>% 
+  ungroup() %>% 
+  mutate(
+    ChronicIllness = if_else(
+      ChronicIllness == "Chronic Obstructive Pulmonary Disease (COPD)",
+      "COPD", ChronicIllness)
+  ) %>% 
   group_by(postcode, ChronicIllness, Dispense_Year, Dispense_Qtr) %>% 
   summarise(trans_count = sum(n, na.rm = TRUE)) %>% 
   mutate(Dispense_YrQtr = as.yearqtr(
@@ -198,6 +204,7 @@ range01 <- function(x) { # normalise cognostics b/t 0 and 1
 }
 
 cogs_ts <- postcode_illness_ts %>% 
+  map(~ .[, apply(., 2, function(x) !any(x == 0))]) %>% # remove any 0's series
   map(tsmeasures)
 cogs_ts_scaled <- cogs_ts %>% 
   map(~ apply(., 2, range01)) %>% # normalised with mean of 0, var of 1
@@ -224,25 +231,30 @@ cogs_df %>%
   facet_grid(ChronicIllness ~ .)
 ggplotly()
 
-top1_trend <- cogs_df %>%
-  filter(Cognostics == "trend") %>%
+top1_up <- cogs_df %>%
+  filter(Cognostics == "linearity") %>%
   group_by(ChronicIllness) %>% 
   filter(row_number(Value) == n())
 
 dispense_chronic_bypostcode_qtr %>% 
-  filter(postcode %in% top1_trend$Postcode) %>% 
+  right_join(top1_up, by = c("ChronicIllness", "postcode" = "Postcode")) %>% 
   ggplot(aes(x = Dispense_YrQtr, y = trans_count)) +
   geom_line() +
   geom_point() +
-  facet_grid(ChronicIllness ~ postcode, scales = "free_y") +
+  facet_wrap(~ ChronicIllness + postcode, scales = "free_y") +
   scale_x_yearqtr(format = "%Y Q%q", n = 5)
 
+top1_down <- cogs_df %>%
+  filter(Cognostics == "linearity") %>%
+  group_by(ChronicIllness) %>% 
+  filter(row_number(Value) == 1)
+
 dispense_chronic_bypostcode_qtr %>% 
-  filter(postcode == "4350") %>% # highest in depression
+  right_join(top1_down, by = c("ChronicIllness", "postcode" = "Postcode")) %>% 
   ggplot(aes(x = Dispense_YrQtr, y = trans_count)) +
   geom_line() +
   geom_point() +
-  facet_grid(ChronicIllness ~ ., scales = "free_y") +
+  facet_wrap(~ ChronicIllness + postcode, scales = "free_y") +
   scale_x_yearqtr(format = "%Y Q%q", n = 5)
 
 top1_entropy <- cogs_df %>%
@@ -251,11 +263,37 @@ top1_entropy <- cogs_df %>%
   filter(row_number(Value) == 1)
 
 dispense_chronic_bypostcode_qtr %>% 
-  filter(postcode %in% top1_entropy$Postcode) %>% 
+  right_join(top1_entropy, by = c("ChronicIllness", "postcode" = "Postcode")) %>% 
   ggplot(aes(x = Dispense_YrQtr, y = trans_count)) +
   geom_line() +
   geom_point() +
-  facet_grid(ChronicIllness ~ postcode, scales = "free_y") +
+  facet_wrap(~ ChronicIllness + postcode, scales = "free_y") +
+  scale_x_yearqtr(format = "%Y Q%q", n = 5)
+
+top1_spikiness <- cogs_df %>%
+  filter(Cognostics == "spikiness") %>%
+  group_by(ChronicIllness) %>% 
+  filter(row_number(Value) == n())
+
+dispense_chronic_bypostcode_qtr %>% 
+  right_join(top1_spikiness, by = c("ChronicIllness", "postcode" = "Postcode")) %>% 
+  ggplot(aes(x = Dispense_YrQtr, y = trans_count)) +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~ ChronicIllness + postcode, scales = "free_y") +
+  scale_x_yearqtr(format = "%Y Q%q", n = 5)
+
+top1_season <- cogs_df %>%
+  filter(Cognostics == "season") %>%
+  group_by(ChronicIllness) %>% 
+  filter(row_number(Value) == n())
+
+dispense_chronic_bypostcode_qtr %>% 
+  right_join(top1_season, by = c("ChronicIllness", "postcode" = "Postcode")) %>% 
+  ggplot(aes(x = Dispense_YrQtr, y = trans_count)) +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~ ChronicIllness + postcode, scales = "free_y") +
   scale_x_yearqtr(format = "%Y Q%q", n = 5)
 
 dispense_chronic_bypostcode_qtr %>% 
@@ -271,7 +309,11 @@ library(gridExtra)
 cogs_pca <- cogs_ts_scaled %>% 
   map(~ prcomp(., center = FALSE))
 p_cogs_pca <- cogs_pca %>% 
-  map(~ autoplot(., loadings = TRUE, loadings.label = TRUE))
+  map2(
+    illness_names, 
+    ~ autoplot(.x, loadings = TRUE, loadings.label = TRUE, size = 0.1) +
+      ggtitle(.y)
+  )
 grid.arrange(
   p_cogs_pca[[1]], p_cogs_pca[[2]], p_cogs_pca[[3]], p_cogs_pca[[4]],
   p_cogs_pca[[5]], p_cogs_pca[[6]], p_cogs_pca[[7]], p_cogs_pca[[8]],
