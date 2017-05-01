@@ -1,6 +1,8 @@
 ---
 title: "The PBS safety net"
-output: html_notebook
+output:
+  html_document: default
+  html_notebook: default
 ---
 
 ```{r message=F, warning=F}

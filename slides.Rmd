@@ -1,7 +1,7 @@
 ---
-title: "Spatio-temporal effects in drug sales, <br>in association with demographics and disease"
-author: "merops: Monash Experts in R, <br> Organising Pharmaceutical Sales"
-date: "Paul Harrison, Earo Wang, <br> Nat Tomasetti, Di Cook, Stuart Lee"
+title: "Spatio-temporal effects in drug sales, <br>in association with demographics, provider, drugs choices and disease"
+author: "Team MEROPS (kingfishers) <br>Monash Experts in R, Organising Pharmaceutical Sales"
+date: "<br>Members: Paul Harrison, Earo Wang, <br> Nat Tomasetti, Di Cook, Stuart Lee"
 output:
   xaringan::moon_reader:
     lib_dir: libs
@@ -15,8 +15,125 @@ output:
 
 ```{r setup, include=FALSE}
 options(htmltools.dir.version = FALSE)
+library(knitr)
+opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  error = FALSE,
+  cache = TRUE,
+  fig.height = 2,
+  fig.width = 5,
+  collapse = TRUE,
+  comment = "#>"
+)
 ```
 
+```{r libraries, cache=FALSE}
+library(zoo)
+library(RSQLite)
+library(forcats)
+library(tidyverse)
+library(lubridate)
+library(gridExtra)
+```
+
+```{r read_data, eval=FALSE}
+# Read data and make summary files once only
+db <- src_sqlite("MelbDatathon2017.sqlite", create = FALSE)
+trans <- tbl(db, "Transactions")
+drugs <- tbl(db, "Drugs")
+illness_db <- tbl(db, "ChronicIllness")
+patients_db <- tbl(db, "Patients")
+
+dispense <- trans %>% 
+  group_by(Dispense_Week) %>% 
+  summarise(n = count()) %>% 
+  collect(n = Inf)
+save(dispense, file="data/dispense.rda")
+
+illness <- illness_db %>% collect(n = Inf)
+illness <- illness %>% mutate(MasterProductID = as.integer(MasterProductID))
+chronic_drugs <- illness$MasterProductID
+dispense_bychronic <- trans %>% 
+  mutate(Chronic = if_else(Drug_ID %in% chronic_drugs, "Y", "N")) %>% 
+  group_by(Chronic, Dispense_Week) %>% 
+  tally() %>% 
+  collect(n = Inf)
+save(dispense_bychronic, file="data/dispense_bychronic.rda")
+
+dispense_chronic_dat <- trans %>% 
+  filter(Drug_ID %in% chronic_drugs) %>% 
+  collect(n = Inf)
+# By different chronic illness
+dispense_chronic <- dispense_chronic_dat %>% 
+  left_join(illness, by = c("Drug_ID" = "MasterProductID")) %>% 
+  group_by(ChronicIllness, Dispense_Week) %>% 
+  tally() %>% 
+  mutate(
+    Dispense_Week = as_date(Dispense_Week),
+    Dispense_Year = year(Dispense_Week),
+    Dispense_Month = month(Dispense_Week, label = TRUE),
+    Dispense_Qtr = quarter(Dispense_Week)
+  ) %>% 
+  filter(Dispense_Year >= 2011, Dispense_Year < 2016)
+save(dispense_chronic, file="data/dispense_chronic.rda")
+```
+
+```{r preprocess_data}
+load("data/dispense.rda")
+load("data/dispense_bychronic.rda")
+load("data/dispense_chronic.rda")
+
+dispense <- dispense %>% 
+  mutate(
+    Dispense_Week = as_date(Dispense_Week),
+    Dispense_Year = year(Dispense_Week),
+    Dispense_Month = month(Dispense_Week, label = TRUE),
+    Dispense_Qtr = quarter(Dispense_Week)
+  ) %>% 
+  filter(Dispense_Year >= 2011, Dispense_Year < 2016)
+
+dispense_qtr <- dispense %>% 
+  filter(Dispense_Year >= 2011, Dispense_Year < 2016) %>% 
+  group_by(Dispense_Year, Dispense_Qtr) %>% 
+  summarise(trans_count = sum(n, na.rm = TRUE)) %>% 
+  mutate(Dispense_YrQtr = as.yearqtr(
+    paste(Dispense_Year, Dispense_Qtr, sep = " Q"), "%Y Q%q")
+  )
+
+# By chronic illness or not
+dispense_bychronic <- dispense_bychronic %>% 
+  mutate(
+    Dispense_Week = as_date(Dispense_Week),
+    Dispense_Year = year(Dispense_Week),
+    Dispense_Month = month(Dispense_Week, label = TRUE),
+    Dispense_Qtr = quarter(Dispense_Week)
+  ) %>% 
+  filter(Dispense_Year >= 2011, Dispense_Year < 2016)
+
+dispense_bychronic_qtr <- dispense_bychronic %>% 
+  group_by(Chronic, Dispense_Year, Dispense_Qtr) %>% 
+  summarise(trans_count = sum(n, na.rm = TRUE)) %>% 
+  mutate(Dispense_YrQtr = as.yearqtr(
+    paste(Dispense_Year, Dispense_Qtr, sep = " Q"), "%Y Q%q")
+  )
+
+dispense_chronic_qtr <- dispense_chronic %>% 
+  group_by(ChronicIllness, Dispense_Year, Dispense_Qtr) %>% 
+  summarise(trans_count = sum(n, na.rm = TRUE)) %>% 
+  mutate(Dispense_YrQtr = as.yearqtr(
+    paste(Dispense_Year, Dispense_Qtr, sep = " Q"), "%Y Q%q")
+  )
+
+
+dispense_chronic_qtr <- dispense_chronic %>% 
+  group_by(ChronicIllness, Dispense_Year, Dispense_Qtr) %>% 
+  summarise(trans_count = sum(n, na.rm = TRUE)) %>% 
+  mutate(Dispense_YrQtr = as.yearqtr(
+    paste(Dispense_Year, Dispense_Qtr, sep = " Q"), "%Y Q%q")
+  )
+
+```
 background-image: url(transparent_merops.png)
 background-position: center top
 class: center, bottom
@@ -30,7 +147,48 @@ class: center, bottom
 
 ---
 
-# Thanks!
+# Drug sales over time
+
+```{r fig.width=8, fig.height=6}
+
+dispense %>% 
+  group_by(Dispense_Week) %>% 
+  summarise(trans_count = sum(n, na.rm = TRUE)) %>% 
+  ggplot(aes(x = Dispense_Week, y = trans_count)) +
+  geom_line() +
+  geom_point() -> p1
+
+dispense_qtr %>% 
+  ggplot(aes(x = Dispense_YrQtr, y = trans_count)) +
+  geom_line() +
+  geom_point() +
+  scale_x_yearqtr(format = "%Y Q%q", n = 5) -> p2
+
+dispense_chronic_qtr %>% 
+  ggplot(aes(x = Dispense_YrQtr, y = trans_count)) +
+  geom_line() +
+  geom_point() +
+  facet_grid(ChronicIllness ~ ., scales = "free_y") +
+  scale_x_yearqtr(format = "%Y Q%q", n = 5) -> p3
+
+grid.arrange(p1, p2, p3, ncol=2, layout_matrix=rbind(c(1, 3), c(2, 3)))
+```
+
+---
+
+# Big spenders
+
+-Map out locations big spenders
+-Reasons for spending
+
+---
+# Market share
+
+Apotex sold 60 of 80 scripts in ... typical market share
+
+---
+
+# Acknowledgements
 
 Slides created via the R package [**xaringan**](https://github.com/yihui/xaringan).
 

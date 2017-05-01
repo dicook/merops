@@ -129,8 +129,11 @@ dispense_chronic_qtr %>%
   scale_x_yearqtr(format = "%Y Q%q", n = 5)
 
 # Look at chronic illness by gender
-patients <- patients_db %>% collect(n = Inf) %>% 
-  mutate(Patient_ID = as.integer(Patient_ID))
+# patients_db$Patient_ID <- patients_db$`Patient_ID`
+# colnames(patients)[1] <- "Patient_ID"
+patients <- patients_db %>% collect(n = Inf) #%>% 
+  #mutate(Patient_ID = as.integer(Patient_ID))
+patients$Patient_ID <- as.integer(patients$Patient_ID)
 dispense_chronic_full <- dispense_chronic_dat %>% 
   left_join(illness, by = c("Drug_ID" = "MasterProductID")) %>% 
   left_join(patients, by = "Patient_ID")
@@ -185,8 +188,9 @@ postcode_illness <- dispense_chronic_bypostcode_qtr %>%
   map(spread, postcode, trans_count, fill = 0)
 
 postcode_illness_ts <- postcode_illness %>% 
-  map(select, -c(ChronicIllness, Dispense_YrQtr)) %>% 
-  map(ts, start = c(2011, 1), frequency = 4)
+  map(select, -c(ChronicIllness, Dispense_YrQtr)) 
+postcode_illness_ts <- postcode_illness_ts %>% 
+  lapply(function(x) ts(x, start = c(2011, 1), frequency = 4))
 
 # devtools::install_github("earowang/tscognostics")
 library(tscognostics)

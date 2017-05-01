@@ -169,11 +169,13 @@ url <- function(lat, lon, return.call = "json") {
 getURL(url(l$lat, l$lon))
 rev_geoCode(l[1], l[2])
 
-ggplot(data=filter(store_pop, numStores>0)) + geom_point(aes(x=SES_Adv_Score, y=SpendPer1000, colour=factor(numStores)))
+ggplot(data=filter(store_pop, numStores>0)) + 
+  geom_point(aes(x=SES_Adv_Score, y=SpendPer1000)) +
+  scale_y_log10()
 
 
 # Redo grouping by patient postcode
-patients <- tbl(md, 'Patients') %>% collect()
+patients <- tbl(md, 'Patients') %>% collect(n = Inf)
 colnames(patients) <- c('Patient_ID', 'gender', 'year_of_birth', 'postcode')
 patients$Patient_ID = as.numeric(patients$Patient_ID)
 tpatients <- ts %>% group_by(Patient_ID) %>% summarise(purchases=n(), totalSpend=sum(PatientPrice_Amt)) %>% collect()
