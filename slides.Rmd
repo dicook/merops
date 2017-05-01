@@ -35,16 +35,19 @@ library(forcats)
 library(tidyverse)
 library(lubridate)
 library(gridExtra)
+library(ggthemes)
+library(ggmap)
 ```
 
 ```{r read_data, eval=FALSE}
 # Read data and make summary files once only
 db <- src_sqlite("MelbDatathon2017.sqlite", create = FALSE)
 trans <- tbl(db, "Transactions")
-drugs <- tbl(db, "Drugs")
+drugs <- tbl(db, "Drugs") %>% collect(n = Inf)
 illness_db <- tbl(db, "ChronicIllness")
 patients_db <- tbl(db, "Patients")
-
+stores <- tbl(db, "Stores") %>% collect(n = Inf)
+  
 dispense <- trans %>% 
   group_by(Dispense_Week) %>% 
   summarise(n = count()) %>% 
@@ -77,6 +80,30 @@ dispense_chronic <- dispense_chronic_dat %>%
   ) %>% 
   filter(Dispense_Year >= 2011, Dispense_Year < 2016)
 save(dispense_chronic, file="data/dispense_chronic.rda")
+
+patients <- tbl(db, 'Patients') %>% collect(n = Inf)
+colnames(patients) <- c('Patient_ID', 'gender', 'year_of_birth', 'postcode')
+patients$Patient_ID <- as.numeric(patients$Patient_ID)
+tpatients <- ts %>% group_by(Patient_ID) %>% summarise(purchases=n(), totalSpend=sum(PatientPrice_Amt)) %>% collect()
+highspend <- filter(tpatients, totalSpend > 20000)
+hightrans <- ts %>% filter(Patient_ID %in% highspend$Patient_ID) %>% collect()
+
+pt_524998 <- trans %>% 
+  filter(Patient_ID == "524998") %>% collect()
+colnames(patients)[1] <- "Patient_ID"
+pt_524998_dem <- patients %>% 
+  filter(Patient_ID == "524998") 
+colnames(stores)[1] <- "Store_ID"
+pt_524998_store <- stores %>% 
+  filter(Store_ID == pt_524998$Store_ID[1])
+pt_524998_dem$Patient_ID <-
+  as.integer(pt_524998_dem$Patient_ID)
+pt_524998_store$Store_ID <-
+  as.integer(pt_524998_store$Store_ID)
+pt_524998 <- left_join(pt_524998, pt_524998_dem) %>%
+  rename(postcode_patient = postcode)
+pt_524998 <- left_join(pt_524998, pt_524998_store)
+save(pt_524998, file="data/patient_524988.rda")
 ```
 
 ```{r preprocess_data}
@@ -147,9 +174,9 @@ class: center, bottom
 
 ---
 
-# Drug sales over time
+# Drug sales over time increasing
 
-```{r fig.width=8, fig.height=6}
+```{r fig.width=10, fig.height=6}
 
 dispense %>% 
   group_by(Dispense_Week) %>% 
@@ -174,10 +201,46 @@ dispense_chronic_qtr %>%
 grid.arrange(p1, p2, p3, ncol=2, layout_matrix=rbind(c(1, 3), c(2, 3)))
 ```
 
+and seasonal, except for osteoporosis.
 ---
 
-# Big spenders
+# One patient who spent `$25000` lives on 
 
+```{r fig.width=4, fig.height=4, fig.align='center'}
+load("data/patient_524988.rda")
+pt_524998 <- pt_524998 %>% 
+  mutate(Dispense_Week = ymd(Dispense_Week), 
+  Prescription_Week = ymd(Prescription_Week))
+#ggplot(data=pt_524998, 
+#       aes(x=Prescription_Week, y=Dispensed_Qty, colour=Drug_Code)) + geom_point()
+#map <- read_csv("nat_map_pop.csv")
+#tassie <- map %>% filter(substr(POA_CODE, 1, 1) == "7")
+#ggplot(data=tassie, aes(x=long, y=lat, group=group)) +
+#  geom_path() + theme_map()
+centroids <- read_csv("postcode_centroids.csv")
+postcodes <- c(unique(pt_524998$postcode_patient),
+              unique(pt_524998$postcode))
+centroids %>% filter(POA_CODE %in% postcodes) %>%
+  select(long_c, lat_c) %>%
+  mutate(label = c("patient", "store")) -> loc
+
+m <- get_map(location = "Tasmania", zoom=7, scale=1) 
+ggmap(m) +
+  geom_point(data=loc, aes(x=long_c, y=lat_c)) +
+  geom_text(data=loc, 
+            aes(x=long_c, y=lat_c, label=label), 
+            hjust = 1, nudge_x = 0.05,
+            vjust = 0, nudge_y = 0.1) +
+  theme_map()
+
+#pt_524998_drugs <- pt_524998 %>% 
+#  select(Drug_ID, Drug_Code) %>% distinct()
+#illness %>% filter(MasterProductID %in% #pt_524998_drugs$Drug_ID) %>% 
+#  select(ChronicIllness) %>% distinct()
+```
+
+Flinders Island and buys their drugs on mainland Tasmania. Treatment was for Epilepsy and Depression.
+---
 -Map out locations big spenders
 -Reasons for spending
 

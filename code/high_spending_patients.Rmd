@@ -17,9 +17,9 @@ library(dplyr)
 library(tidyr)
 md <- src_sqlite('../MelbDatathon2017.sqlite', create=FALSE)
 ts <- tbl(md, 'Transactions')
-chronic <- tbl(md, 'ChronicIllness') %>% collect() %>% mutate(MasterProductID = as.numeric(MasterProductID),
+chronic <- tbl(md, 'ChronicIllness') %>% collect(n = Inf) %>% mutate(MasterProductID = as.numeric(MasterProductID),
                     ChronicIllness = ifelse(ChronicIllness == 'Chronic Obstructive Pulmonary Disease (COPD)', 'COPD', ChronicIllness))
-patients <- tbl(md, 'Patients') %>% collect()
+patients <- tbl(md, 'Patients') %>% collect(n = Inf)
 colnames(patients) <- c('Patient_ID', 'gender', 'year_of_birth', 'postcode')
 patients$Patient_ID <- as.numeric(patients$Patient_ID)
 tpatients <- ts %>% group_by(Patient_ID) %>% summarise(purchases=n(), totalSpend=sum(PatientPrice_Amt)) %>% collect()
