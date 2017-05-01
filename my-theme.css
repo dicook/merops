@@ -1,3 +1,9 @@
+h1 {
+  color: #0cb577;
+}
+body {
+  color: #006698;
+}
 .inverse {
   background-image: url(transparent_merops_small.png);
   color: #006698;
@@ -12,13 +18,17 @@
 }
 .title-slide h1 {
   text-shadow: none;
-  color: #006698;
+  color: #0cb577;
   margin-top: -70px;
+  float: left;
+  text-align: left;
 }
 .title-slide h2, .title-slide h3 {
   text-shadow: none;
-  color: #0cb577;
+  color: #006698;
   line-height: 1em;
+  float: left;
+  text-align: left;
 }
 .title-slide .remark-slide-number {
   display: none;
