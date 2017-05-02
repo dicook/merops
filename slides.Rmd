@@ -301,6 +301,47 @@ class: left
 background-image: url(transparent_merops_small.png)
 background-position: center top
 class: left
+# Spatial distribution
+
+```{r eval=FALSE}
+load("data/total_by_postcode.rda")
+pop <- read_csv("postcode_population.csv")
+spend_pop_postcode <- left_join(postcode_tally, 
+   pop, by=c("postcode"="POA_CODE")) %>%
+  mutate(Qnt_Pop = Qnt/Pop*1000, Amt_Pop = Amt/Pop*1000) %>%
+  mutate(Qnt_Pop_c=cut(Qnt_Pop, 
+            c(0, 1000, 10000, 100000, 2000000)),
+    #quantile(Qnt_Pop, c(0,.25, .5, .75, 1), na.rm=TRUE)),
+    Amt_Pop_c=cut(Amt_Pop, 
+            c(0, 1000, 10000, 100000, 2000000)))
+    #quantile(Amt_Pop, c(0,.25, .5, .75, 1), na.rm=TRUE))) 
+spend_pop_postcode$Qnt_Pop_c <- factor(spend_pop_postcode$Qnt_Pop_c, 
+      levels=c("(0,1e+03]",
+               "(1e+03,1e+04]",
+               "(1e+04,1e+05]",
+               "(1e+05,2e+06]"),
+      labels=c("(0,1000]","(1000,10k)",
+               "(10k,100k]","(100k-2mil]"))
+nat_map <- read_csv("nat_map_pop.csv")
+nat_map <- nat_map %>% filter(long >= 110, long <= 155)
+nat_map_spend <- left_join(nat_map,
+      spend_pop_postcode[,c(1, 13:16)],
+      by=c("POA_CODE"="postcode"))
+nat_map_spend <- nat_map_spend %>%
+  filter(!is.na(Qnt_Pop_c))
+ggplot(nat_map, aes(x=long, y=lat, group=group)) +
+  geom_path(colour="grey70", size=0.1) + 
+  geom_polygon(data=nat_map_spend, fill="#006698",
+               alpha=0.7) + 
+  facet_wrap(~Qnt_Pop_c, ncol=4, drop=TRUE) + theme_map()
+```
+
+!()[map_quantity.png]
+---
+
+background-image: url(transparent_merops_small.png)
+background-position: center top
+class: left
 # Drug sales over time increasing
 
 ```{r fig.width=10, fig.height=6}
@@ -503,7 +544,7 @@ ggmap(m) +
 ```
 
 Flinders Island and buys their drugs on mainland Tasmania. Treatment was for Epilepsy and Depression.
----
+
 ---
 background-image: url(transparent_merops_small.png)
 background-position: center top
@@ -512,18 +553,30 @@ class: left
 ```{r fig.width=10, fig.height=6}
 load('data/highspend.rda')
 nat_map_pop = read_csv('nat_map_pop.csv')
-centroids %>% mutate(HS = ifelse(POA_CODE %in% highspend$postcode, 1, 0)) %>%
-  filter(HS == 1) %>% 
-p1 <- ggplot() + geom_point(aes(x=long_c, y=lat_c, colour='HS')) + 
-  + geom_map(map=nat_map_pop, aes(map_id=id), fill="grey90", colour="white") 
+cd <- centroids %>% 
+  mutate(HS = ifelse(POA_CODE %in% 
+                       highspend$postcode, 1, 0)) %>%
+  filter(HS == 1) 
+p1 <- ggplot(data=cd) + 
+  geom_point(aes(x=long_c, y=lat_c, colour='HS')) + 
+  geom_map(map=nat_map_pop, aes(map_id=id),
+           fill="grey90", colour="white") 
 
 load('data/hightrans.rda')
-hightrans %>% left_join(illness, by=c('Drug_ID' = 'MasterProductID')) %>% group_by(ChronicIllness) %>%
+hightrans %>% 
+  left_join(illness, 
+            by=c('Drug_ID' = 'MasterProductID')) %>%
+  group_by(ChronicIllness) %>%
   #filter(ChronicIllness != 'NA') %>% 
-  summarise(TotalSpend = sum(PatientPrice_Amt)) -> highillness
-p2 <- ggplot(highillness) + geom_bar(aes(y=TotalSpend, x=ChronicIllness), stat='identity') + 
-  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
-  labs(x='Drug Purpose', y='Expenditure for >$20,000 patients')
+  summarise(TotalSpend = sum(PatientPrice_Amt)) ->
+  highillness
+p2 <- ggplot(data=highillness) +
+  geom_bar(aes(y=TotalSpend, x=ChronicIllness),
+           stat='identity') + 
+  theme(axis.text.x = element_text(angle = 90, 
+                                   hjust = 1)) + 
+  labs(x='Drug Purpose', 
+       y='Expenditure for >$20,000 patients')
 ```
 ---
 background-image: url(transparent_merops_small.png)
