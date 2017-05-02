@@ -37,6 +37,7 @@ library(lubridate)
 library(gridExtra)
 library(ggthemes)
 library(ggmap)
+library(viridis)
 ```
 
 ```{r read_data, eval=FALSE}
@@ -124,6 +125,40 @@ pt_524998 <- left_join(pt_524998, pt_524998_dem) %>%
   rename(postcode_patient = postcode)
 pt_524998 <- left_join(pt_524998, pt_524998_store)
 save(pt_524998, file="data/patient_524988.rda")
+
+
+# Patient demongraphics and chronic illness
+patient_drug <- dispense_all_dat %>%
+    distinct(Patient_ID, Drug_ID) %>%
+    ungroup()
+
+patient_illness <- patient_drug %>%
+    left_join(illness, by = c("Drug_ID" = "MasterProductID")) %>%
+    filter(!is.na(ChronicIllness)) %>%
+    distinct(Patient_ID, ChronicIllness) %>%
+    ungroup() %>%
+    left_join(patients, by="Patient_ID") %>%
+    mutate(
+        age = ifelse(year_of_birth==1900,NA,2016-year_of_birth),
+        ChronicIllness=ifelse(ChronicIllness=="Chronic Obstructive Pulmonary Disease (COPD)","COPD",ChronicIllness))
+
+illness_age <- patient_illness %>%
+    filter(!is.na(age)) %>%
+    count(ChronicIllness, age) %>%
+    ungroup()
+save(illness_age, file="data/illness_age.rda")
+
+illness_gender <- patient_illness %>%
+    filter(gender != "U") %>%
+    count(ChronicIllness, gender) %>%
+    ungroup()
+save(illness_gender, file="data/illness_gender.rda")
+
+illness_illness <- select(patient_illness, Patient_ID, illness1=ChronicIllness) %>%
+    inner_join(select(patient_illness, Patient_ID, illness2=ChronicIllness), by="Patient_ID") %>%
+    count(illness1, illness2) %>%
+    ungroup()
+save(illness_illness, file="data/illness_illness.rda")
 ```
 
 ```{r preprocess_data}
@@ -132,6 +167,9 @@ load("data/dispense_bychronic.rda")
 load("data/dispense_chronic.rda")
 load("data/dispense_zero_paid.rda")
 load("data/dispense_chronic_zero_paid.rda")
+load("data/illness_age.rda")
+load("data/illness_gender.rda")
+load("data/illness_illness.rda")
 
 dispense <- dispense %>% 
   mutate(
@@ -287,7 +325,7 @@ In 2015-2016 \[2\], **59.3%** of PBS spending was for concession card holders, 1
 background-image: url(transparent_merops_small.png)
 background-position: center top
 class: left
-# Patients obtain more drugs to manage chronic illnesses after hitting the PBS safety net each year
+# Patients obtain less drugs to manage chronic illnesses before hitting the PBS safety net each year
 
 ```{r fig.width=10, fig.height=5}
 
@@ -317,6 +355,70 @@ p3 <- dispense_chronic_qtr_zero_paid %>%
   theme(strip.text.y = element_text(angle=0))
 
 grid.arrange(p1, p2, p3, ncol=2, widths=c(1,1.5), layout_matrix=rbind(c(1, 3), c(2, 3)))
+```
+---
+
+background-image: url(transparent_merops_small.png)
+background-position: center top
+class: left
+# Demographics of chronic illness
+
+558,352 patients. Have gender of 79% of patients (42% male, 58% female), and the year of birth of 6.7%.
+
+```{r fig.width=10, fig.height=5}
+p1 <- illness_gender %>%
+    mutate(
+        ChronicIllness=reorder(ChronicIllness,-n),
+        n=ifelse(gender=="M",-n,n)) %>%
+    ggplot(aes(x=ChronicIllness,y=n,fill=gender)) + geom_col() +
+    coord_flip() + labs(x="",y="Number of patients",fill="Gender") + ylim(c(-1.75e5,1.75e5))
+
+median_ages <- illness_age %>%
+    group_by(ChronicIllness) %>%
+    summarize(median_age=median(rep(age,n))) %>%
+    arrange(median_age)
+
+p2 <- illness_age %>%
+    mutate(ChronicIllness=factor(ChronicIllness,median_ages$ChronicIllness)) %>%
+    ggplot(aes(x=age,y=n)) + geom_bar(stat="identity", width=1) +
+    facet_grid(ChronicIllness~.,scales="free_y") + labs(y="Number of patients", x="Age") +
+    theme(strip.text.y = element_text(angle=0))
+
+grid.arrange(p1, p2, ncol=2)
+```
+---
+
+background-image: url(transparent_merops_small.png)
+background-position: center top
+class: left
+# Co-morbidity of chronic illness
+
+Possible causes of clustering:
+* Diseases of old age
+* Metabolic syndrome: obesity, high cholesterol ("lipids"), hypertension and heart failure, diabetes
+
+```{r fig.width=10, fig.height=5}
+p1 <- illness_illness %>%
+    ggplot(aes(x=reorder(illness1,-n), y=reorder(illness2,-n), fill=log2(n))) +
+    geom_tile(color="black") + coord_fixed() + 
+    scale_fill_viridis(breaks=log2(10^(1:6)),labels=as.integer(10^(1:6))) +
+    theme_minimal() + theme( axis.text.x=element_text(angle=90,vjust=0.5,hjust=1) ) +
+    labs(x="",y="",fill="Number of\npatients")
+
+baseline <- illness_illness %>% 
+    filter(illness1==illness2)
+p2 <- illness_illness %>%
+    left_join(select(baseline,illness1,baseline1=n),by="illness1") %>%
+    left_join(select(baseline,illness2,baseline2=n),by="illness2") %>%
+    mutate(deviation = n / (as.numeric(baseline1)*baseline2/558352)) %>%
+    filter(illness1 != illness2) %>%
+    ggplot(aes(x=reorder(illness1,-n), y=reorder(illness2,-n), fill=log2(deviation))) +
+    geom_tile(color="black") + coord_fixed() + 
+    scale_fill_viridis(limits=c(-1,1),breaks=c(-1,0,1), labels=c("x 0.5","x 1","x 2"),option="plasma") +
+    theme_minimal() + theme( axis.text.x=element_text(angle=90,vjust=0.5,hjust=1) ) +
+    labs(x="",y="",fill="Fold-\ndeviation\nfrom\nexpected")
+
+grid.arrange(p1, p2, ncol=2)
 ```
 
 ---
