@@ -288,7 +288,7 @@ dispense_qtr %>%
   ggplot(aes(x = Dispense_YrQtr, y = trans_count)) +
   geom_line() +
   geom_point() +
-  scale_x_yearqtr(format = "%Y Q%q", n = 5)
+  scale_x_yearqtr(format = "%Y Q%q", n = 5) +
   xlab("Dispense quarter") +
   ylab("The number of transactions") -> p2
 
@@ -297,7 +297,7 @@ dispense_chronic_qtr %>%
   geom_line() +
   geom_point() +
   facet_grid(ChronicIllness ~ ., scales = "free_y") +
-  scale_x_yearqtr(format = "%Y Q%q", n = 5)
+  scale_x_yearqtr(format = "%Y Q%q", n = 5) +
   xlab("Dispense quarter") +
   ylab("The number of transactions") -> p3
 
