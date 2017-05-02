@@ -208,8 +208,11 @@ range01 <- function(x) { # normalise cognostics b/t 0 and 1
 }
 
 cogs_ts <- postcode_illness_ts %>% 
-  map(~ .[, apply(., 2, function(x) !any(x == 0))]) %>% # remove any 0's series
+  # removev any postcode with transactions <= 300 over time
+  map(~ .[, apply(., 2, function(x) sum(x) > 300)]) %>%
+  # map(~ .[, apply(., 2, function(x) !any(x == 0))]) %>% # remove any 0's series
   map(tsmeasures)
+  
 cogs_ts_scaled <- cogs_ts %>% 
   map(~ apply(., 2, range01)) %>% # normalised with mean of 0, var of 1
   map(as.data.frame)
@@ -229,11 +232,14 @@ cogs_df <- cogs_ts_scaled %>%
   gather(Cognostics, Value, ACF1:trough) %>% 
   as_tibble()
 
-cogs_df %>% 
+cogs_df %>%
+  filter(
+    Cognostics %in% c("entropy", "linearity", "season", "spikiness")
+  ) %>% 
   ggplot(aes(x = Cognostics, y = Value, group = Postcode)) +
   geom_jitter(size = 0.2) +
   facet_grid(ChronicIllness ~ .)
-ggplotly()
+# ggplotly()
 
 top1_up <- cogs_df %>%
   filter(Cognostics == "linearity") %>%
@@ -268,6 +274,19 @@ top1_entropy <- cogs_df %>%
 
 dispense_chronic_bypostcode_qtr %>% 
   right_join(top1_entropy, by = c("ChronicIllness", "postcode" = "Postcode")) %>% 
+  ggplot(aes(x = Dispense_YrQtr, y = trans_count)) +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~ ChronicIllness + postcode, scales = "free_y") +
+  scale_x_yearqtr(format = "%Y Q%q", n = 5)
+
+top1_noise <- cogs_df %>%
+  filter(Cognostics == "entropy") %>%
+  group_by(ChronicIllness) %>% 
+  filter(row_number(Value) == n())
+
+dispense_chronic_bypostcode_qtr %>% 
+  right_join(top1_noise, by = c("ChronicIllness", "postcode" = "Postcode")) %>% 
   ggplot(aes(x = Dispense_YrQtr, y = trans_count)) +
   geom_line() +
   geom_point() +
