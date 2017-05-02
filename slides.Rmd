@@ -109,6 +109,8 @@ patients$Patient_ID <- as.numeric(patients$Patient_ID)
 tpatients <- ts %>% group_by(Patient_ID) %>% summarise(purchases=n(), totalSpend=sum(PatientPrice_Amt)) %>% collect()
 highspend <- filter(tpatients, totalSpend > 20000)
 hightrans <- ts %>% filter(Patient_ID %in% highspend$Patient_ID) %>% collect()
+save(highspend, file='data/highspend.rda')
+save(hightrans, file='data/hightrans.rda')
 
 pt_524998 <- trans %>% 
   filter(Patient_ID == "524998") %>% collect()
@@ -160,6 +162,29 @@ illness_illness <- select(patient_illness, Patient_ID, illness1=ChronicIllness) 
     count(illness1, illness2) %>%
     ungroup()
 save(illness_illness, file="data/illness_illness.rda")
+
+# Manufacturer Preferences by postcode
+GeoDrug <- ts %>% group_by(Patient_ID, Drug_ID) %>% summarise(purchases=sum(Dispensed_Qty)) %>% collect() %>%
+  ungroup() %>% left_join(patients) %>% group_by(postcode, Drug_ID) %>% summarise(purchases=sum(purchases)) %>% 
+  ungroup() %>% left_join(drugs, by=c('Drug_ID' = 'MasterProductID')) %>% select(postcode, Drug_ID, purchases, GenericIngredientName) %>%
+  left_join(select(drugs, MasterProductID, ManufacturerName, StrengthCode, PackSizeNumber),
+            by=c('Drug_ID' = 'MasterProductID'))
+Generics <- GeoDrug %>% group_by(GenericIngredientName, Drug_ID, StrengthCode, ManufacturerName) %>% summarise(purchases=sum(purchases)) %>% ungroup()
+Generics <- Generics %>% group_by(GenericIngredientName, StrengthCode) %>% summarise(total=sum(purchases)) %>% ungroup() %>%
+  right_join(Generics) %>% mutate(ProportionPop = purchases/total)
+GeoDrugProp <- GeoDrug %>% group_by(postcode, GenericIngredientName, StrengthCode) %>% summarise(total=sum(purchases)) %>% ungroup() %>%
+  right_join(GeoDrug) %>% mutate(ProportionPostcode = purchases/total) %>% left_join(select(Generics, -total, -purchases))
+FavouredManuf <- GeoDrugProp %>% group_by(postcode, ManufacturerName) %>% 
+  summarise(purchases=sum(purchases), expected=sum(total*ProportionPop)) %>%
+  mutate(difference = purchases-expected, ratio = purchases/expected) %>% ungroup()
+save(FavouredManuf, file='data/favoured_manuf.rda')
+BigManuf <- ts %>% left_join(select(drugs, MasterProductID, ManufacturerName), by=c('Drug_ID' = 'MasterProductID'), copy=TRUE) %>%
+  group_by(ManufacturerName) %>% summarise(sales = sum(WholeSalePrice_Amt*Dispensed_Qty)) %>% collect() %>% ungroup()  %>% 
+  mutate(sales = ifelse(is.na(sales), 0, sales), 
+         prop = sales / sum(BigManuf$sales, na.rm=TRUE)) %>%
+  arrange(desc(sales))
+BigManuf$cumul = cumsum(BigManuf$prop)
+save(BigManuf, file='data/big_manuf.rda')
 ```
 
 ```{r preprocess_data}
@@ -466,16 +491,53 @@ ggmap(m) +
 
 Flinders Island and buys their drugs on mainland Tasmania. Treatment was for Epilepsy and Depression.
 ---
--Map out locations big spenders
--Reasons for spending
+---
+background-image: url(transparent_merops_small.png)
+background-position: center top
+class: left
+# 24 Patients spent more than $20,000 each.
+```{r fig.width=10, fig.height=6}
+load('data/highspend.rda')
+nat_map_pop = read_csv('nat_map_pop.csv')
+centroids %>% mutate(HS = ifelse(POA_CODE %in% highspend$postcode, 1, 0)) %>%
+  filter(HS == 1) %>% 
+p1 <- ggplot() + geom_point(aes(x=long_c, y=lat_c, colour='HS')) + 
+  + geom_map(map=nat_map_pop, aes(map_id=id), fill="grey90", colour="white") 
+
+load('data/hightrans.rda')
+hightrans %>% left_join(illness, by=c('Drug_ID' = 'MasterProductID')) %>% group_by(ChronicIllness) %>%
+  #filter(ChronicIllness != 'NA') %>% 
+  summarise(TotalSpend = sum(PatientPrice_Amt)) -> highillness
+p2 <- ggplot(highillness) + geom_bar(aes(y=TotalSpend, x=ChronicIllness), stat='identity') + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+  labs(x='Drug Purpose', y='Expenditure for >$20,000 patients')
+```
+---
+background-image: url(transparent_merops_small.png)
+background-position: center top
+class: left
+
+# Postcode Drug Prescriptions against Market Share
+```{r fig.width=10, fig.height=5}
+top10 = BigManuf$ManufacturerName[1:10]
+SubsetFavoured <- FavouredManuf %>% filter(ManufacturerName %in% top10) %>% mutate(postcode = as.numeric(postcode))
+ggplot(SubsetFavoured) + geom_point(aes(postcode, ratio, colour=ManufacturerName)) + labs(y='Ratio of Total : Expected Revenue')
+```
+
+* Many manufacturers compete to sell the same generic ingredient.
+* Doctors in a postcode may have a favoured manufacturer, and prescribe their drugs more than expected.
+* Apotex Pty Ltd drugs are sometimes prescribed >100 times as often as their market share dictates.
 
 ---
 background-image: url(transparent_merops_small.png)
 background-position: center top
 class: left
-# Market share
+# Apotex and Pravastatin
 
-Apotex sold 60 of 80 scripts in ... typical market share
+* Pravastatin is a common anti-cholestreol drug, with over 2,000,000 purchases.
+* 14 Manufacturers compete at 4 different dosages.
+* Two of Apotex's products make up less than half a percent of the 20-40mg Market.
+* Postcode 6216 prescribed Pravastatin 78 times, 55 from Apotex.
 
 ---
 
