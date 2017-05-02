@@ -302,27 +302,36 @@ class: left
 background-image: url(transparent_merops_small.png)
 background-position: center top
 class: left
-# Spatial distribution
+# Postal codes by quantity dispensed 
+
+Counts by postcode adjusted to per person, using Census population numbers. Low quantities (<20) tends to be rural, medium (20-100) towards the east coast concentrating in NSW, and a few locations have massive numbers dispensed (more than one thousand per person) - 2015 totals
 
 ```{r eval=FALSE}
 load("data/total_by_postcode.rda")
 pop <- read_csv("postcode_population.csv")
 spend_pop_postcode <- left_join(postcode_tally, 
    pop, by=c("postcode"="POA_CODE")) %>%
-  mutate(Qnt_Pop = Qnt/Pop*1000, Amt_Pop = Amt/Pop*1000) %>%
+  mutate(Qnt_Pop = Qnt/Pop, Amt_Pop = Amt/Pop) %>%
   mutate(Qnt_Pop_c=cut(Qnt_Pop, 
-            c(0, 1000, 10000, 100000, 2000000)),
+            c(0, 5, 20, 100, 2000)),
     #quantile(Qnt_Pop, c(0,.25, .5, .75, 1), na.rm=TRUE)),
     Amt_Pop_c=cut(Amt_Pop, 
-            c(0, 1000, 10000, 100000, 2000000)))
+            c(0, 5, 20, 100, 2000)))
     #quantile(Amt_Pop, c(0,.25, .5, .75, 1), na.rm=TRUE))) 
 spend_pop_postcode$Qnt_Pop_c <- factor(spend_pop_postcode$Qnt_Pop_c, 
-      levels=c("(0,1e+03]",
-               "(1e+03,1e+04]",
-               "(1e+04,1e+05]",
-               "(1e+05,2e+06]"),
-      labels=c("(0,1000]","(1000,10k)",
-               "(10k,100k]","(100k-2mil]"))
+      levels=c("(0,5]",
+               "(5,20]",
+               "(20,100]",
+               "(100,2e+03]"),
+      labels=c("(0,5]","(5,20]",
+               "(20,100]",">100"))
+spend_pop_postcode$Amt_Pop_c <- factor(spend_pop_postcode$Amt_Pop_c, 
+      levels=c("(0,5]",
+               "(5,20]",
+               "(20,100]",
+               "(100,2e+03]"),
+      labels=c("(0,5]","(5,20]",
+               "(20,100]",">100"))
 nat_map <- read_csv("nat_map_pop.csv")
 nat_map <- nat_map %>% filter(long >= 110, long <= 155)
 nat_map_spend <- left_join(nat_map,
@@ -330,14 +339,34 @@ nat_map_spend <- left_join(nat_map,
       by=c("POA_CODE"="postcode"))
 nat_map_spend <- nat_map_spend %>%
   filter(!is.na(Qnt_Pop_c))
+nat_map_spend <- nat_map_spend %>%
+  filter(!is.na(Amt_Pop_c))
 ggplot(nat_map, aes(x=long, y=lat, group=group)) +
   geom_path(colour="grey70", size=0.1) + 
   geom_polygon(data=nat_map_spend, fill="#006698",
                alpha=0.7) + 
-  facet_wrap(~Qnt_Pop_c, ncol=4, drop=TRUE) + theme_map()
+  facet_wrap(~Qnt_Pop_c, ncol=4, drop=TRUE) + 
+  theme_map()
+ggplot(nat_map, aes(x=long, y=lat, group=group)) +
+  geom_path(colour="grey70", size=0.1) + 
+  geom_polygon(data=nat_map_spend, fill="#006698",
+               alpha=0.7) + 
+  facet_wrap(~Amt_Pop_c, ncol=4, drop=TRUE) + 
+  theme_map()
 ```
 
-!()[map_quantity.png]
+<img src="map_quantity.png" width="800">
+
+---
+
+background-image: url(transparent_merops_small.png)
+background-position: center top
+class: left
+# Spending per person by postcode
+
+Highest amounts spent per person in a postcode was close to $2000, and in south-east Australia.
+
+<img src="map_amount.png" width="800">
 ---
 
 background-image: url(transparent_merops_small.png)
@@ -564,6 +593,7 @@ p1 <- ggplot(data=cd) +
            fill="grey90", colour="white") 
 
 load('data/hightrans.rda')
+load("data/illness.rda")
 hightrans %>% 
   left_join(illness, 
             by=c('Drug_ID' = 'MasterProductID')) %>%
@@ -586,9 +616,15 @@ class: left
 
 # Postcode Drug Prescriptions against Market Share
 ```{r fig.width=10, fig.height=5}
-top10 = BigManuf$ManufacturerName[1:10]
-SubsetFavoured <- FavouredManuf %>% filter(ManufacturerName %in% top10) %>% mutate(postcode = as.numeric(postcode))
-ggplot(SubsetFavoured) + geom_point(aes(postcode, ratio, colour=ManufacturerName)) + labs(y='Ratio of Total : Expected Revenue')
+load("data/favoured_manuf.rda")
+top10 = FavouredManuf$ManufacturerName[1:10]
+SubsetFavoured <- FavouredManuf %>%
+  filter(ManufacturerName %in% top10) %>% 
+  mutate(postcode = as.numeric(postcode))
+ggplot(SubsetFavoured) + 
+  geom_point(aes(postcode, ratio,
+                 colour=ManufacturerName)) +
+  labs(y='Ratio of Total : Expected Revenue')
 ```
 
 * Many manufacturers compete to sell the same generic ingredient.
