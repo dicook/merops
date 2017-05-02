@@ -81,6 +81,26 @@ dispense_chronic <- dispense_chronic_dat %>%
   filter(Dispense_Year >= 2011, Dispense_Year < 2016)
 save(dispense_chronic, file="data/dispense_chronic.rda")
 
+
+# Look at zero-payment transactions
+dispense_all_dat <- trans %>%
+    collect(n = Inf)
+
+dispense_zero_paid <- dispense_all_dat %>%
+    mutate(zero_paid = !is.na(PatientPrice_Amt) & PatientPrice_Amt == 0) %>%
+    count(Dispense_Week, zero_paid) %>%
+    ungroup()
+save(dispense_zero_paid, file="data/dispense_zero_paid.rda")
+
+dispense_chronic_zero_paid <- dispense_all_dat %>%
+    filter(Drug_ID %in% chronic_drugs) %>%
+    mutate(zero_paid = !is.na(PatientPrice_Amt) & PatientPrice_Amt == 0) %>%
+    left_join(illness, by = c("Drug_ID" = "MasterProductID")) %>% 
+    count(ChronicIllness, Dispense_Week, zero_paid) %>%
+    ungroup()
+save(dispense_chronic_zero_paid, file="data/dispense_chronic_zero_paid.rda")
+
+
 patients <- tbl(db, 'Patients') %>% collect(n = Inf)
 colnames(patients) <- c('Patient_ID', 'gender', 'year_of_birth', 'postcode')
 patients$Patient_ID <- as.numeric(patients$Patient_ID)
@@ -110,6 +130,8 @@ save(pt_524998, file="data/patient_524988.rda")
 load("data/dispense.rda")
 load("data/dispense_bychronic.rda")
 load("data/dispense_chronic.rda")
+load("data/dispense_zero_paid.rda")
+load("data/dispense_chronic_zero_paid.rda")
 
 dispense <- dispense %>% 
   mutate(
@@ -160,13 +182,47 @@ dispense_chronic_qtr <- dispense_chronic %>%
     paste(Dispense_Year, Dispense_Qtr, sep = " Q"), "%Y Q%q")
   )
 
+
+
+dispense_zero_paid <- dispense_zero_paid %>% 
+  mutate(
+    Dispense_Week = as_date(Dispense_Week),
+    Dispense_Year = year(Dispense_Week),
+    Dispense_Month = month(Dispense_Week, label = TRUE),
+    Dispense_Qtr = quarter(Dispense_Week)
+  ) %>% 
+  filter(Dispense_Year >= 2011, Dispense_Year < 2016)
+
+dispense_zero_paid_qtr <- dispense_zero_paid %>% 
+  filter(Dispense_Year >= 2011, Dispense_Year < 2016) %>% 
+  group_by(Dispense_Year, Dispense_Qtr, zero_paid) %>% 
+  summarise(n = sum(n, na.rm = TRUE)) %>% 
+  mutate(Dispense_YrQtr = as.yearqtr(
+    paste(Dispense_Year, Dispense_Qtr, sep = " Q"), "%Y Q%q")
+  )
+
+dispense_chronic_qtr_zero_paid <- dispense_chronic_zero_paid %>% 
+  mutate(
+    Dispense_Week = as_date(Dispense_Week),
+    Dispense_Year = year(Dispense_Week),
+    Dispense_Month = month(Dispense_Week, label = TRUE),
+    Dispense_Qtr = quarter(Dispense_Week)
+  ) %>% 
+  filter(Dispense_Year >= 2011, Dispense_Year < 2016) %>%
+  group_by(ChronicIllness, Dispense_Year, Dispense_Qtr, zero_paid) %>% 
+  summarise(n = sum(n, na.rm = TRUE)) %>% 
+  ungroup() %>%
+  mutate(Dispense_YrQtr = as.yearqtr(
+    paste(Dispense_Year, Dispense_Qtr, sep = " Q"), "%Y Q%q")
+  )
+
 ```
 background-image: url(transparent_merops_small.png)
 background-position: center top
 class: left
 # Outline
 
-- Temporal trends in drug sales
+- Temporal trends in drug sales and the PBS safety net
 - Spatial distribution
 - How gender, age, and disease are related to sales
 - Data processing
@@ -205,6 +261,64 @@ grid.arrange(p1, p2, p3, ncol=2, layout_matrix=rbind(c(1, 3), c(2, 3)))
 ```
 
 and seasonal, except for osteoporosis.
+---
+
+background-image: url(transparent_merops_small.png)
+background-position: center top
+class: left
+# The PBS safety net
+
+Concession cards available to the elderly, disabled, unemployed, etc. Currently \[1\]:
+
+* Concession card holders pay $6.30 per purchase but **nothing** beyond $378.00 each year.
+* Non-concession card holders $38.80 per purchase but $6.30 beyond $1,494.90 each year.
+
+In 2015-2016 \[2\], **59.3%** of PBS spending was for concession card holders, 16.6% to non-concession card holders, and 16.6% on "Section 100" drugs -- specialized drugs outside of normal PBS arrangements. 
+
+**19.4%** of PBS spending was on the safety net for concession card holders, where the government pays the entire amount. This can be seen in the data.
+
+<small>
+1. https://www.humanservices.gov.au/customer/services/medicare/pharmaceutical-benefits-scheme-pbs-safety-net
+2. http://www.pbs.gov.au/statistics/expenditure-prescriptions/2015-2016/expenditure-prescriptions-report-2015-16.pdf
+</small>
+
+---
+
+background-image: url(transparent_merops_small.png)
+background-position: center top
+class: left
+# Patients obtain more drugs to manage chronic illnesses after hitting the PBS safety net each year
+
+```{r fig.width=10, fig.height=5}
+
+p1 <- dispense_zero_paid %>% 
+  mutate(zero_paid=factor(ifelse(zero_paid,"nothing","co-payment"), levels=c("nothing","co-payment"))) %>%
+  ggplot(aes(x = Dispense_Week, y = n, fill=zero_paid)) +
+  geom_col() +
+  labs(x="",y="Number of purchases",fill="Patient pays") +
+  guides(fill=FALSE)
+
+p2 <- dispense_zero_paid_qtr %>% 
+  mutate(zero_paid=factor(ifelse(zero_paid,"nothing","co-payment"), levels=c("nothing","co-payment"))) %>%
+  ggplot(aes(x = Dispense_YrQtr, y = n, fill=zero_paid)) +
+  geom_col() +
+  labs(x="",y="Number of purchases",fill="Patient pays") +
+  scale_x_yearqtr(format = "%Y Q%q", n = 5) +
+  guides(fill=FALSE)
+
+p3 <- dispense_chronic_qtr_zero_paid %>% 
+  mutate(zero_paid=factor(ifelse(zero_paid,"nothing","co-payment"), levels=c("nothing","co-payment"))) %>%
+  mutate(ChronicIllness=ifelse(ChronicIllness=="Chronic Obstructive Pulmonary Disease (COPD)","COPD",ChronicIllness)) %>%
+  ggplot(aes(x = Dispense_YrQtr, y = n, fill=zero_paid)) +
+  geom_col() +
+  labs(x="",y="Number of purchases",fill="Patient pays") +
+  facet_grid(ChronicIllness ~ ., scales = "free_y") +
+  scale_x_yearqtr(format = "%Y Q%q", n = 5) +
+  theme(strip.text.y = element_text(angle=0))
+
+grid.arrange(p1, p2, p3, ncol=2, widths=c(1,1.5), layout_matrix=rbind(c(1, 3), c(2, 3)))
+```
+
 ---
 
 background-image: url(transparent_merops_small.png)
