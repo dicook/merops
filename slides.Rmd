@@ -195,6 +195,7 @@ store_tally <- trans %>%
             Amt = sum(WholeSalePrice_Amt, na.rm=TRUE)) %>% 
   collect(n=Inf)
 postcode_tally <- left_join(store_tally, stores, by="Store_ID") %>%
+  filter(year(ymd(Dispense_Week)) == 2015) %>%
   group_by(postcode) %>%
   summarise(Qnt = sum(Qnt), Amt = sum(Amt))
 save(postcode_tally, file="data/total_by_postcode.rda")
