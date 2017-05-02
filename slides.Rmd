@@ -185,6 +185,19 @@ BigManuf <- ts %>% left_join(select(drugs, MasterProductID, ManufacturerName), b
   arrange(desc(sales))
 BigManuf$cumul = cumsum(BigManuf$prop)
 save(BigManuf, file='data/big_manuf.rda')
+
+# Merge postcode with transactions
+colnames(stores)[1] <- "Store_ID"
+stores$Store_ID <- as.integer(stores$Store_ID)
+store_tally <- trans %>%
+  group_by(Store_ID, Dispense_Week) %>%
+  summarise(Qnt = sum(Dispensed_Qty, na.rm=TRUE),
+            Amt = sum(WholeSalePrice_Amt, na.rm=TRUE)) %>% 
+  collect(n=Inf)
+postcode_tally <- left_join(store_tally, stores, by="Store_ID") %>%
+  group_by(postcode) %>%
+  summarise(Qnt = sum(Qnt), Amt = sum(Amt))
+save(postcode_tally, file="data/total_by_postcode.rda")
 ```
 
 ```{r preprocess_data}
