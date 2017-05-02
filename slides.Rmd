@@ -70,7 +70,8 @@ dispense_chronic_dat <- trans %>%
   collect(n = Inf)
 # By different chronic illness
 dispense_chronic <- dispense_chronic_dat %>% 
-  left_join(illness, by = c("Drug_ID" = "MasterProductID")) %>% 
+  left_join(illness, by = c("Drug_ID" = "MasterProductID")) %>%
+  mutate(ChronicIllness=ifelse(ChronicIllness=="Chronic Obstructive Pulmonary Disease (COPD)","COPD",ChronicIllness)) %>% 
   group_by(ChronicIllness, Dispense_Week) %>% 
   tally() %>% 
   mutate(
