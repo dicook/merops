@@ -10,11 +10,11 @@
 library(rgdal)
 sF <- readOGR(dsn="AUST_postcodes", layer="POA_2011_AUST")
 
-#library(rmapshaper)
-#sFsmall <- ms_simplify(sF, keep=0.1) # use instead of thinnedSpatialPoly
+library(rmapshaper)
+sFsmall <- ms_simplify(sF, keep=0.05) # use instead of thinnedSpatialPoly
 
-sFsmall <- gSimplify(sF, tol=0.01)
-  
+#sFsmall <- gSimplify(sF, tol=0.01)
+
 map_data <- sF@data
 head(map_data)
 map_data$id <- rownames(map_data)
@@ -52,6 +52,14 @@ write_csv(nat_map_pop, path="nat_map_pop.csv")
 #install.packages('tilegramsR')
 #library(tilegramsR)
 # None for Oz, and have to create
+
+# Merge purchases with postcode
+library(RSQLite)
+db <- src_sqlite("MelbDatathon2017.sqlite", create = FALSE)
+trans <- tbl(db, "Transactions")
+drugs <- tbl(db, "Drugs") %>% collect(n = Inf)
+illness_db <- tbl(db, "ChronicIllness")
+patients_db <- tbl(db, "Patients")
 
 # We need the polygon centers to do a cartogram
 polys <- as(sFsmall, "SpatialPolygons")
@@ -119,8 +127,8 @@ colnames(stores) = c('Store_ID', 'StateCode', 'postcode', 'IsBannerGroup')
 stores <- mutate(stores, Store_ID = as.numeric(Store_ID))
 tstore <- ts %>% group_by(Store_ID) %>% summarise(purchases=n(), totalSpend=sum(PatientPrice_Amt)) %>% collect()
 store_postcode <- left_join(stores, tstore) %>% group_by(postcode) %>% summarise(numPurchases=sum(purchases), totalSpend=sum(totalSpend), numStores=n())
-store_pop <- left_join(pop, store_postcode, 
-                       by=c('POA_CODE' = 'postcode')) %>% 
+store_pop <- left_join(pop, store_postcode,
+                       by=c('POA_CODE' = 'postcode')) %>%
   mutate(totalSpend = ifelse(is.na(totalSpend), 0, totalSpend),
   numPurchases = ifelse(is.na(numPurchases), 0, numPurchases),
   numStores = ifelse(is.na(numStores), 0, numStores),
@@ -133,11 +141,11 @@ ggplot(data=nat_map_store) +
   theme_map()
 
 # Top store suburb is a commerical district in West Newcastle
-head(arrange(store_pop, desc(SpendPer1000))) %>% 
+head(arrange(store_pop, desc(SpendPer1000))) %>%
   select(POA_CODE, numPurchases, totalSpend, numStores, SpendPer1000)
 
 # Expenditure per 1000 people decreases as suburb wealth proxy increases
-ggplot(data=filter(store_pop, numStores>0)) + 
+ggplot(data=filter(store_pop, numStores>0)) +
   geom_point(aes(x=SES_Adv_Score, y=SpendPer1000))
 
 # Find post code location
@@ -171,7 +179,7 @@ url <- function(lat, lon, return.call = "json") {
 getURL(url(l$lat, l$lon))
 rev_geoCode(l[1], l[2])
 
-ggplot(data=filter(store_pop, numStores>0)) + 
+ggplot(data=filter(store_pop, numStores>0)) +
   geom_point(aes(x=SES_Adv_Score, y=SpendPer1000)) +
   scale_y_log10()
 
@@ -181,9 +189,9 @@ patients <- tbl(md, 'Patients') %>% collect(n = Inf)
 colnames(patients) <- c('Patient_ID', 'gender', 'year_of_birth', 'postcode')
 patients$Patient_ID = as.numeric(patients$Patient_ID)
 tpatients <- ts %>% group_by(Patient_ID) %>% summarise(purchases=n(), totalSpend=sum(PatientPrice_Amt)) %>% collect()
-patient_postcode <- left_join(patients, tpatients) %>% group_by(postcode) %>% 
+patient_postcode <- left_join(patients, tpatients) %>% group_by(postcode) %>%
   summarise(numPurchases=sum(purchases), totalSpend=sum(totalSpend), numPatients=n())
-patient_pop <- left_join(pop, patient_postcode, by = c('POA_CODE' = 'postcode')) %>% 
+patient_pop <- left_join(pop, patient_postcode, by = c('POA_CODE' = 'postcode')) %>%
   mutate(totalSpend = ifelse(is.na(totalSpend), 0, totalSpend),
          numPurchases = ifelse(is.na(numPurchases), 0, numPurchases),
          numPatients = ifelse(is.na(numPatients), 0, numPatients),

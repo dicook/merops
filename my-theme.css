@@ -4,12 +4,8 @@ h1 {
 body {
   color: #006698;
 }
-.inverse {
-  background-image: url(transparent_merops_small.png);
-  color: #006698;
-}
-.inverse h1 {
-  color: #006698;
+a {
+  color: #0cb577;
 }
 .title-slide {
   background-image: url(transparent_merops.png);
