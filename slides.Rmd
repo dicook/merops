@@ -248,7 +248,8 @@ dispense_chronic_bypostcode_qtr <- dispense_chronic_bypostcode %>%
   mutate(Dispense_YrQtr = as.yearqtr(
     paste(Dispense_Year, Dispense_Qtr, sep = " Q"), "%Y Q%q")
   )
-
+save(dispense_chronic_bypostcode_qtr, 
+     file="data/dispense_chronic_bypostcode_qtr.rda")
 postcode_illness <- dispense_chronic_bypostcode_qtr %>% 
   ungroup() %>% 
   select(postcode, ChronicIllness, Dispense_YrQtr, trans_count) %>%  
@@ -501,7 +502,112 @@ dispense_chronic_bygender_qtr %>%
 ```
 
 ---
-# How to find some postcodes of interest?
+# Digging out some postcodes of interest?
+
+```{r fig.width=10, fig.height=6}
+load("data/dispense_chronic_bypostcode_qtr.rda")
+range01 <- function(x) { # normalise cognostics b/t 0 and 1
+  rng <- range(x, na.rm = TRUE)
+  (x - rng[1]) / (rng[2] - rng[1])
+}
+cogs_ts_scaled <- cogs_ts %>% 
+  map(~ apply(., 2, range01)) %>% # normalised with mean of 0, var of 1
+  map(as.data.frame)
+illness_names <- names(cogs_ts)
+postcode_2 <- cogs_ts %>% 
+  map(row.names)
+cogs_df <- cogs_ts_scaled %>% 
+  map2(illness_names, ~ mutate(.x, ChronicIllness = .y)) %>% 
+  map2(postcode_2, ~ mutate(.x, Postcode = .y)) %>% 
+  bind_rows() %>% 
+  mutate(
+    ChronicIllness = if_else(
+      ChronicIllness == "Chronic Obstructive Pulmonary Disease (COPD)",
+      "COPD", ChronicIllness)
+  ) %>% 
+  gather(Cognostics, Value, ACF1:trough) %>% 
+  as_tibble()
+
+cogs_df %>%
+  filter(
+    Cognostics %in% c("entropy", "linearity", "season", "spikiness")
+  ) %>% 
+  ggplot(aes(x = Cognostics, y = Value, group = Postcode)) +
+  geom_jitter(size = 0.2) +
+  facet_grid(ChronicIllness ~ .) +
+  ggtitle("Cognostics for each postcode over time") -> p1
+
+top1_up <- cogs_df %>%
+  filter(Cognostics == "linearity") %>%
+  group_by(ChronicIllness) %>% 
+  filter(row_number(Value) == n())
+
+dispense_chronic_bypostcode_qtr %>% 
+  right_join(top1_up, by = c("ChronicIllness", "postcode" = "Postcode")) %>% 
+  ggplot(aes(x = Dispense_YrQtr, y = trans_count)) +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~ ChronicIllness + postcode, scales = "free_y", ncol = 2) +
+  scale_x_yearqtr(format = "%Y Q%q", n = 5) +
+  xlab("Dispense quarter") +
+  ylab("The number of transactions") +
+  ggtitle("The most increasing postcode over time") -> p2
+grid.arrange(p1, p2, ncol=2)
+```
+
+---
+# Digging out some postcodes of interest?
+
+```{r fig.width=12, fig.height=8}
+top1_entropy <- cogs_df %>%
+  filter(Cognostics == "entropy") %>%
+  group_by(ChronicIllness) %>% 
+  filter(row_number(Value) == 1)
+
+dispense_chronic_bypostcode_qtr %>% 
+  right_join(top1_entropy, by = c("ChronicIllness", "postcode" = "Postcode")) %>% 
+  ggplot(aes(x = Dispense_YrQtr, y = trans_count)) +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~ ChronicIllness + postcode, scales = "free_y", ncol = 2) +
+  scale_x_yearqtr(format = "%Y Q%q", n = 5) +
+  xlab("Dispense quarter") +
+  ylab("The number of transactions") +
+  ggtitle("The most predictable postcode over time") -> p1
+
+top1_spikiness <- cogs_df %>%
+  filter(Cognostics == "spikiness") %>%
+  group_by(ChronicIllness) %>% 
+  filter(row_number(Value) == n())
+
+dispense_chronic_bypostcode_qtr %>% 
+  right_join(top1_spikiness, by = c("ChronicIllness", "postcode" = "Postcode")) %>% 
+  ggplot(aes(x = Dispense_YrQtr, y = trans_count)) +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~ ChronicIllness + postcode, scales = "free_y", ncol = 2) +
+  scale_x_yearqtr(format = "%Y Q%q", n = 5) +
+  xlab("Dispense quarter") +
+  ylab("The number of transactions") +
+  ggtitle("The most spiky postcode over time") -> p2
+
+top1_season <- cogs_df %>%
+  filter(Cognostics == "season") %>%
+  group_by(ChronicIllness) %>% 
+  filter(row_number(Value) == n())
+
+dispense_chronic_bypostcode_qtr %>% 
+  right_join(top1_season, by = c("ChronicIllness", "postcode" = "Postcode")) %>% 
+  ggplot(aes(x = Dispense_YrQtr, y = trans_count)) +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~ ChronicIllness + postcode, scales = "free_y", ncol = 2) +
+  scale_x_yearqtr(format = "%Y Q%q", n = 5) +
+  xlab("Dispense quarter") +
+  ylab("The number of transactions") +
+  ggtitle("The most seasonal postcode over time") -> p3
+grid.arrange(p1, p2, p3, ncol=3)
+```
 ---
 
 background-image: url(transparent_merops_small.png)
