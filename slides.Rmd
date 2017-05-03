@@ -555,6 +555,7 @@ dispense_chronic_bypostcode_qtr %>%
 grid.arrange(p1, p2, ncol=2)
 ```
 
+Time series cognostics measure aspects such as overall variability (entropy), linear trend, seasonality and spikiness. These are computed for each postcode, giving them a rating on these sorts of patterns.
 ---
 # Digging out some postcodes of interest?
 
@@ -870,4 +871,4 @@ The chakra comes from [remark.js](https://remarkjs.com), [**knitr**](http://yihu
 
 Rainbow bee-eater (merops ornatus) photo by JJ Harrison, CC license
 
-Thanks to Phil Brierley for organising the datathon, and XXX for making the data available.
+Thanks to Phil Brierley for organising the datathon, and NostraData for making the data available.
