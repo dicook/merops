@@ -19,6 +19,7 @@ library(knitr)
 opts_chunk$set(
   echo = FALSE,
   message = FALSE,
+  warning = FALSE, 
   error = FALSE,
   cache = TRUE,
   fig.height = 2,
@@ -361,23 +362,16 @@ background-position: center top
 class: left
 # Outline
 
-- Spatial distribution: how do sales vary by post code, calibrated for population
+- Spatial distribution
 - Temporal trends in drug sales
 - Effect of the PBS safety net
-- How gender, age, and disease are related to sales
+- Demographics
 - Do providers have brand preferences?
 - Fantastic beasts and where to find them ...
 
 ---
 
-background-image: url(transparent_merops_small.png)
-background-position: center top
-class: left
-# Postal codes by quantity dispensed 
-
-Counts by postcode adjusted to per person, using Census population numbers. Low quantities (<20) tends to be rural, medium (20-100) towards the east coast concentrating in NSW, and a few locations have massive numbers dispensed (more than one thousand per person) - 2015 totals
-
-```{r warning=FALSE}
+```{r warning=FALSE, eval=FALSE}
 load("data/total_by_postcode.rda")
 pop <- read_csv("postcode_population.csv")
 spend_pop_postcode <- left_join(postcode_tally, 
@@ -438,42 +432,36 @@ ggplot(nat_map, aes(x=long, y=lat, group=group)) +
   theme_map()
 ```
 
-<img src="map_quantity.png" width="800">
-
-```{r warning=FALSE, fig.width=7, fig.height=2}
-postcode_id <- distinct(nat_map, POA_CODE, id)
-
-spend_pop_postcode %>%
-right_join(postcode_id, by=c("postcode"="POA_CODE")) %>%
-ggplot(aes(fill=ifelse(is.na(Qnt_Pop),0,Qnt_Pop))) + coord_fixed() +
-geom_map(map=nat_map,aes(map_id=id)) +
-scale_y_continuous(limits=c(-38.5,-37.5),oob=function(a,b)a) +
-scale_x_continuous(limits=c(143.5,145.5),oob=function(a,b)a) +
-scale_fill_continuous(limits=c(0,15)) +
-labs(x="",y="",fill="Quantity\nper person") +
-theme_map()
-```
-
----
 
 background-image: url(transparent_merops_small.png)
 background-position: center top
 class: left
 # Spending per person by postcode
 
-Highest amounts spent per person in a postcode was close to $2000, and in south-east Australia.
+Across all of Australia, 
 
-<img src="map_amount.png" width="800">
+.pull-left[<img src="map_amount.png" width="400">]
 
-```{r warning=FALSE, fig.width=7, fig.height=2}
+.pull-right[and focusing on Melbourne
+<img src="map_amount_melb.png" width="350">]
+
+```{r warning=FALSE, fig.width=7, fig.height=2, eval=FALSE}
 mp <- spend_pop_postcode %>%
   right_join(postcode_id, by=c("postcode"="POA_CODE")) 
-p1 <- ggplot(data=mp, aes(fill=ifelse(is.na(Amt_Pop),0,Qnt_Pop))) + 
+nat_map_spend <- left_join(nat_map, mp)
+ggplot(nat_map_spend, aes(x=long, y=lat, group=group)) +
+  geom_path(colour="white", size=0.01) + 
+  geom_polygon(data=nat_map_spend, 
+               aes(fill=ifelse(is.na(Amt_Pop),0,Amt_Pop))) + 
+#    scale_fill_gradient2("", low="#8856a7", mid="#88419d", high="#e0ecf4") +
+    scale_fill_continuous("",limits=c(0,800)) +
+  theme_map()
+p1 <- ggplot(data=mp, aes(fill=ifelse(is.na(Amt_Pop),0,Amt_Pop))) + 
   coord_fixed() +
-    geom_map(map=nat_map_pop,aes(map_id=id)) +
+    geom_map(map=nat_map,aes(map_id=id)) +
     #scale_y_continuous(limits=c(-38.5,-37.5),oob=function(a,b)a) +
     scale_x_continuous(limits=c(110, 155),oob=function(a,b)a) +
-    scale_fill_continuous(limits=c(0,15)) +
+    scale_fill_continuous("", limits=c(0,15)) +
     labs(x="",y="",fill="Spending\nper person") +
     theme_map()
 p2 <- ggplot(data=mp, aes(fill=ifelse(is.na(Amt_Pop),0,Qnt_Pop))) + 
@@ -492,7 +480,7 @@ grid.arrange(p1, p2, ncol=2)
 background-image: url(transparent_merops_small.png)
 background-position: center top
 class: left
-# Drug sales over time increasing
+# Drug sales increasing over time, with seasonality, except for osteoporosis
 
 ```{r fig.width=10, fig.height=6}
 
@@ -502,6 +490,7 @@ dispense %>%
   ggplot(aes(x = Dispense_Week, y = trans_count)) +
   geom_line() +
   geom_point() +
+  geom_hline(yintercept=0, colour="white") +
   xlab("Dispense week") +
   ylab("The number of transactions") -> p1
 
@@ -510,6 +499,7 @@ dispense_qtr %>%
   geom_line() +
   geom_point() +
   scale_x_yearqtr(format = "%Y Q%q", n = 5) +
+  geom_hline(yintercept=0, colour="white") +
   xlab("Dispense quarter") +
   ylab("The number of transactions") -> p2
 
@@ -526,13 +516,16 @@ dispense_chronic_qtr %>%
 grid.arrange(p1, p2, p3, ncol=2, layout_matrix=rbind(c(1, 3), c(2, 3)))
 ```
 
-and seasonal, except for osteoporosis.
+
 ---
 
-# Decrease in osteoporosis drugs primarily 
+#  By gender
 
 .pull-left[
-due to women, and increase in urology drugs primarily due to men. Women are the primary recipients of drugs for depression, hypertension, and contribute to increase in immunology drugs.
+- Decrease in osteoporosis drugs primarily due to women, and 
+- increase in urology drugs primarily due to men. 
+- Women are the primary recipients of drugs for depression, hypertension, and
+- contribute more to increase in immunology drugs.
 ]
 
 .pull-right[
@@ -598,7 +591,7 @@ cogs_df %>%
 
 * These are computed for each postcode, giving them a rating on these sorts of patterns.
 
-* The jitter plot on the left-hand side shows the ratings on different measures for each postcode, faceted by the diseases. Each dot represents a postcode.
+* The jittered dot plot on the left shows the ratings on different measures for each postcode, faceted by the diseases. Each dot represents a postcode.
 ]
 
 
@@ -894,10 +887,9 @@ background-position: center top
 class: left
 
 # Preferential prescriptions
-Drug prescription purchases for postcode by expected market share. 
-There is some evidence of prescribers making drug preferences for their patients.
 
-```{r fig.width=10, fig.height=5}
+.pull-left[
+```{r fig.width=5, fig.height=5}
 load("data/favoured_manuf.rda")
 
 top10 <- FavouredManuf$ManufacturerName[1:10]
@@ -908,23 +900,33 @@ SubsetFavoured <- FavouredManuf %>%
   arrange(desc(ratio)) %>% 
   filter(ratio > 1, purchases > 50)
 
+l <- min(c(SubsetFavoured$expected, SubsetFavoured$purchases), na.rm=TRUE)
+u <- max(c(SubsetFavoured$expected, SubsetFavoured$purchases), na.rm=TRUE)
 
 ggplot(data = SubsetFavoured,
-       aes( x= purchases, y = expected)) + 
+       aes( y= purchases, x = expected)) + 
+  geom_abline(intercept=0, slope=1, colour="red") +
   geom_jitter() +
   ggrepel::geom_label_repel(data = SubsetFavoured %>% 
                              head(7) %>% 
                              mutate(maker = gsub("PTY|L|LTD|PT", "", ManufacturerName)),
-                           aes(x = purchases, y = expected, label = maker)) +
-  scale_x_log10() +
-  scale_y_log10() +
-  xlab("Purchases") + ylab("Expected Purchases")
+                           aes(y = purchases, x = expected, label = maker)) +
+  scale_x_log10(limits=c(0.001, u)) +
+  scale_y_log10(limits=c(0.001, u)) +
+  ylab("Purchases") + xlab("Expected Purchases") + 
+  theme(aspect.ratio=1) + coord_fixed(ratio=1)
 
 ```
+]
+
+.pull-right[
+Drug prescription purchases for postcode by expected market share. 
+There is some evidence of prescribers making drug preferences for their patients.
 
 * Many manufacturers compete to sell the same generic ingredient.
 * Doctors in a postcode may have a favoured manufacturer, and prescribe that company's drugs more than expected.
 * Apotex Pty Ltd drugs are sometimes prescribed >100 times as often as their market share dictates.
+]
 
 ---
 background-image: url(transparent_merops_small.png)
@@ -945,7 +947,7 @@ background-position: center top
 class: left
 # Acknowledgements
 
-All analysis was done using [R](http://https://cran.r-project.org), using the packages `knitr`, `zoo`, `RSQLite`, `forcats`, `tidyverse`, `lubridate`, `gridExtra`, `ggthemes`, `viridis` and their dependencies.
+All analysis was done using [R](http://https://cran.r-project.org), using the packages `knitr`, `zoo`, `RSQLite`, `forcats`, `tidyverse`, `lubridate`, `gridExtra`, `ggthemes`, `viridis`, `ggrepel` and their dependencies.
 
 Slides created via the R package [**xaringan**](https://github.com/yihui/xaringan).
 
