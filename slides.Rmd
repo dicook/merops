@@ -38,6 +38,8 @@ library(gridExtra)
 library(ggthemes)
 library(ggmap)
 library(viridis)
+# devtools::install_github("earowang/tscognostics")
+# library(tscognostics)
 ```
 
 ```{r read_data, eval=FALSE}
@@ -82,7 +84,26 @@ dispense_chronic <- dispense_chronic_dat %>%
   ) %>% 
   filter(Dispense_Year >= 2011, Dispense_Year < 2016)
 save(dispense_chronic, file="data/dispense_chronic.rda")
+dispense_chronic_bygender <- dispense_chronic_full %>% 
+  group_by(gender, ChronicIllness, Dispense_Week) %>% 
+  tally() %>% 
+  mutate(
+    Dispense_Week = as_date(Dispense_Week),
+    Dispense_Year = year(Dispense_Week),
+    Dispense_Month = month(Dispense_Week, label = TRUE),
+    Dispense_Qtr = quarter(Dispense_Week)
+  ) %>% 
+  filter(Dispense_Year >= 2011, Dispense_Year < 2016)
 
+dispense_chronic_bygender_qtr <- dispense_chronic_bygender %>% 
+  group_by(gender, ChronicIllness, Dispense_Year, Dispense_Qtr) %>% 
+  summarise(trans_count = sum(n, na.rm = TRUE)) %>% 
+  mutate(Dispense_YrQtr = as.yearqtr(
+    paste(Dispense_Year, Dispense_Qtr, sep = " Q"), "%Y Q%q")
+  )
+
+save(dispense_chronic_bygender_qtr,
+     file="data/dispense_chronic_bygender_qtr.rda")
 
 # Look at zero-payment transactions
 dispense_all_dat <- trans %>%
@@ -199,17 +220,65 @@ postcode_tally <- left_join(store_tally, stores, by="Store_ID") %>%
   group_by(postcode) %>%
   summarise(Qnt = sum(Qnt), Amt = sum(Amt))
 save(postcode_tally, file="data/total_by_postcode.rda")
+
+dispense_chronic_full <- dispense_chronic_dat %>% 
+  left_join(illness, by = c("Drug_ID" = "MasterProductID")) %>% 
+  left_join(patients, by = "Patient_ID")
+
+dispense_chronic_bypostcode <- dispense_chronic_full %>% 
+  group_by(postcode, ChronicIllness, Dispense_Week) %>% 
+  tally() %>% 
+  mutate(
+    Dispense_Week = as_date(Dispense_Week),
+    Dispense_Year = year(Dispense_Week),
+    Dispense_Month = month(Dispense_Week, label = TRUE),
+    Dispense_Qtr = quarter(Dispense_Week)
+  ) %>% 
+  filter(Dispense_Year >= 2011, Dispense_Year < 2016)
+
+dispense_chronic_bypostcode_qtr <- dispense_chronic_bypostcode %>% 
+  ungroup() %>% 
+  mutate(
+    ChronicIllness = if_else(
+      ChronicIllness == "Chronic Obstructive Pulmonary Disease (COPD)",
+      "COPD", ChronicIllness)
+  ) %>% 
+  group_by(postcode, ChronicIllness, Dispense_Year, Dispense_Qtr) %>% 
+  summarise(trans_count = sum(n, na.rm = TRUE)) %>% 
+  mutate(Dispense_YrQtr = as.yearqtr(
+    paste(Dispense_Year, Dispense_Qtr, sep = " Q"), "%Y Q%q")
+  )
+
+postcode_illness <- dispense_chronic_bypostcode_qtr %>% 
+  ungroup() %>% 
+  select(postcode, ChronicIllness, Dispense_YrQtr, trans_count) %>%  
+  split(.$ChronicIllness) %>% 
+  map(spread, postcode, trans_count, fill = 0)
+
+postcode_illness_ts <- postcode_illness %>% 
+  map(select, -c(ChronicIllness, Dispense_YrQtr)) 
+postcode_illness_ts <- postcode_illness_ts %>% 
+  lapply(function(x) ts(x, start = c(2011, 1), frequency = 4))
+
+cogs_ts <- postcode_illness_ts %>% 
+  # removev any postcode with transactions <= 300 over time
+  map(~ .[, apply(., 2, function(x) sum(x) > 300)]) %>%
+  # map(~ .[, apply(., 2, function(x) !any(x == 0))]) %>% # remove any 0's series
+  map(tsmeasures)
+save(cogs_ts, file="data/cogs.rda")
 ```
 
 ```{r preprocess_data}
 load("data/dispense.rda")
 load("data/dispense_bychronic.rda")
+load("data/dispense_chronic_bygender_qtr.rda")
 load("data/dispense_chronic.rda")
 load("data/dispense_zero_paid.rda")
 load("data/dispense_chronic_zero_paid.rda")
 load("data/illness_age.rda")
 load("data/illness_gender.rda")
 load("data/illness_illness.rda")
+load("data/cogs.rda")
 
 dispense <- dispense %>% 
   mutate(
@@ -418,7 +487,18 @@ grid.arrange(p1, p2, p3, ncol=2, layout_matrix=rbind(c(1, 3), c(2, 3)))
 and seasonal, except for osteoporosis.
 ---
 
-# By gender and age??
+# By gender?
+
+```{r fig.width=10, fig.height=6}
+dispense_chronic_bygender_qtr %>% 
+  ggplot(aes(x = Dispense_YrQtr, y = trans_count)) +
+  geom_line() +
+  geom_point() +
+  facet_grid(ChronicIllness ~ gender, scales = "free_y") +
+  scale_x_yearqtr(format = "%Y Q%q", n = 5) +
+  xlab("Dispense quarter") +
+  ylab("The number of transactions")
+```
 
 ---
 # How to find some postcodes of interest?
@@ -593,32 +673,41 @@ class: left
 # 24 Patients spent more than $20,000 each.
 ```{r fig.width=10, fig.height=6}
 load('data/highspend.rda')
-nat_map_pop = read_csv('nat_map_pop.csv')
+
+aus_map <- get_map(location = "Australia", zoom=4) 
+
 cd <- centroids %>% 
   mutate(HS = ifelse(POA_CODE %in% 
                        highspend$postcode, 1, 0)) %>%
   filter(HS == 1) 
-p1 <- ggplot(data=cd) + 
-  geom_point(aes(x=long_c, y=lat_c, colour='HS')) + 
-  geom_map(map=nat_map_pop, aes(map_id=id),
-           fill="grey90", colour="white") 
 
+p1 <- ggmap(aus_map) +
+  geom_point(data = cd, aes(x = long_c, y = lat_c)) +
+  theme(axis.text = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.ticks = element_blank())
+
+# bar plot
 load('data/hightrans.rda')
 load("data/illness.rda")
-hightrans %>% 
+highillness <- hightrans %>% 
   left_join(illness, 
             by=c('Drug_ID' = 'MasterProductID')) %>%
   group_by(ChronicIllness) %>%
-  #filter(ChronicIllness != 'NA') %>% 
-  summarise(TotalSpend = sum(PatientPrice_Amt)) ->
-  highillness
+  filter(!is.na(ChronicIllness)) %>% 
+  summarise(TotalSpend = sum(PatientPrice_Amt)) %>%
+  mutate(ChronicIllness = gsub("Chronic Obstructive Pulmonary Disease \\(|\\)" ,"", ChronicIllness),
+         ChronicIllness = factor(ChronicIllness, levels = ChronicIllness[order(TotalSpend)])) 
+
 p2 <- ggplot(data=highillness) +
   geom_bar(aes(y=TotalSpend, x=ChronicIllness),
            stat='identity') + 
-  theme(axis.text.x = element_text(angle = 90, 
-                                   hjust = 1)) + 
   labs(x='Drug Purpose', 
-       y='Expenditure for >$20,000 patients')
+       y='Expenditure for >$20,000 patients') +
+  coord_flip()
+
+grid.arrange(p1, p2, ncol = 2)
 ```
 ---
 background-image: url(transparent_merops_small.png)
