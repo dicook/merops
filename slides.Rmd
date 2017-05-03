@@ -836,9 +836,10 @@ Flinders Island and buys their drugs on mainland Tasmania. Treatment was for Epi
 background-image: url(transparent_merops_small.png)
 background-position: center top
 class: left
-# 24 Patients spent more than $20,000 each
+# Hey, Big Spender!
+24 patients around Australia spent more than $20,000 on prescriptions. 
+The top spending was on drugs for epilepsy, and depression. 
 
-These are their locations. And the top spending was on drugs for epilepsy, and depression. 
 ```{r fig.width=10, fig.height=6}
 load('data/highspend.rda')
 
@@ -882,21 +883,33 @@ background-image: url(transparent_merops_small.png)
 background-position: center top
 class: left
 
-# Drug prescriptions for postcode by 
-expected market share. Top 15 greater than expected. There is some evidence of prescribers making drug preferences for their patients.
+# Preferential prescriptions
+Drug prescription purchases for postcode by expected market share. 
+There is some evidence of prescribers making drug preferences for their patients.
 
 ```{r fig.width=10, fig.height=5}
 load("data/favoured_manuf.rda")
-top10 = FavouredManuf$ManufacturerName[1:10]
+
+top10 <- FavouredManuf$ManufacturerName[1:10]
+
 SubsetFavoured <- FavouredManuf %>%
   filter(ManufacturerName %in% top10) %>% 
-  mutate(postcode = as.numeric(postcode))
-SubsetFavoured %>% arrange(desc(ratio)) %>% 
-  select(ManufacturerName, postcode, ratio) %>% head(15)
-#ggplot(SubsetFavoured) + 
- # geom_point(aes(postcode, ratio,
- #                colour=ManufacturerName)) +
- # labs(y='Ratio of Total : Expected Revenue')
+  mutate(postcode = as.numeric(postcode)) %>% 
+  arrange(desc(ratio)) %>% 
+  filter(ratio > 1, purchases > 50)
+
+
+ggplot(data = SubsetFavoured,
+       aes( x= purchases, y = expected)) + 
+  geom_jitter() +
+  ggrepel::geom_label_repel(data = SubsetFavoured %>% 
+                             head(7) %>% 
+                             mutate(maker = gsub("PTY|L|LTD|PT", "", ManufacturerName)),
+                           aes(x = purchases, y = expected, label = maker)) +
+  scale_x_log10() +
+  scale_y_log10() +
+  xlab("Purchases") + ylab("Expected Purchases")
+
 ```
 
 * Many manufacturers compete to sell the same generic ingredient.
