@@ -466,15 +466,25 @@ Highest amounts spent per person in a postcode was close to $2000, and in south-
 <img src="map_amount.png" width="800">
 
 ```{r warning=FALSE, fig.width=7, fig.height=2}
-spend_pop_postcode %>%
-right_join(postcode_id, by=c("postcode"="POA_CODE")) %>%
-ggplot(aes(fill=ifelse(is.na(Amt_Pop),0,Qnt_Pop))) + coord_fixed() +
-geom_map(map=nat_map,aes(map_id=id)) +
-scale_y_continuous(limits=c(-38.5,-37.5),oob=function(a,b)a) +
-scale_x_continuous(limits=c(143.5,145.5),oob=function(a,b)a) +
-scale_fill_continuous(limits=c(0,15)) +
-labs(x="",y="",fill="Spending\nper person") +
-theme_map()
+mp <- spend_pop_postcode %>%
+  right_join(postcode_id, by=c("postcode"="POA_CODE")) 
+p1 <- ggplot(data=mp, aes(fill=ifelse(is.na(Amt_Pop),0,Qnt_Pop))) + 
+  coord_fixed() +
+    geom_map(map=nat_map_pop,aes(map_id=id)) +
+    #scale_y_continuous(limits=c(-38.5,-37.5),oob=function(a,b)a) +
+    scale_x_continuous(limits=c(110, 155),oob=function(a,b)a) +
+    scale_fill_continuous(limits=c(0,15)) +
+    labs(x="",y="",fill="Spending\nper person") +
+    theme_map()
+p2 <- ggplot(data=mp, aes(fill=ifelse(is.na(Amt_Pop),0,Qnt_Pop))) + 
+  coord_fixed() +
+    geom_map(map=nat_map,aes(map_id=id)) +
+    scale_y_continuous(limits=c(-38.5,-37.5),oob=function(a,b)a) +
+    scale_x_continuous(limits=c(143.5,145.5),oob=function(a,b)a) +
+    scale_fill_continuous(limits=c(0,15)) +
+    labs(x="",y="",fill="Spending\nper person") +
+    theme_map()
+grid.arrange(p1, p2, ncol=2)
 ```
 
 ---
