@@ -770,32 +770,41 @@ class: left
 # 24 Patients spent more than $20,000 each.
 ```{r fig.width=10, fig.height=6}
 load('data/highspend.rda')
-nat_map_pop = read_csv('nat_map_pop.csv')
+
+aus_map <- get_map(location = "Australia", zoom=4) 
+
 cd <- centroids %>% 
   mutate(HS = ifelse(POA_CODE %in% 
                        highspend$postcode, 1, 0)) %>%
   filter(HS == 1) 
-p1 <- ggplot(data=cd) + 
-  geom_point(aes(x=long_c, y=lat_c, colour='HS')) + 
-  geom_map(map=nat_map_pop, aes(map_id=id),
-           fill="grey90", colour="white") 
 
+p1 <- ggmap(aus_map) +
+  geom_point(data = cd, aes(x = long_c, y = lat_c)) +
+  theme(axis.text = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.ticks = element_blank())
+
+# bar plot
 load('data/hightrans.rda')
 load("data/illness.rda")
-hightrans %>% 
+highillness <- hightrans %>% 
   left_join(illness, 
             by=c('Drug_ID' = 'MasterProductID')) %>%
   group_by(ChronicIllness) %>%
-  #filter(ChronicIllness != 'NA') %>% 
-  summarise(TotalSpend = sum(PatientPrice_Amt)) ->
-  highillness
+  filter(!is.na(ChronicIllness)) %>% 
+  summarise(TotalSpend = sum(PatientPrice_Amt)) %>%
+  mutate(ChronicIllness = gsub("Chronic Obstructive Pulmonary Disease \\(|\\)" ,"", ChronicIllness),
+         ChronicIllness = factor(ChronicIllness, levels = ChronicIllness[order(TotalSpend)])) 
+
 p2 <- ggplot(data=highillness) +
   geom_bar(aes(y=TotalSpend, x=ChronicIllness),
            stat='identity') + 
-  theme(axis.text.x = element_text(angle = 90, 
-                                   hjust = 1)) + 
   labs(x='Drug Purpose', 
-       y='Expenditure for >$20,000 patients')
+       y='Expenditure for >$20,000 patients') +
+  coord_flip()
+
+grid.arrange(p1, p2, ncol = 2)
 ```
 ---
 background-image: url(transparent_merops_small.png)
