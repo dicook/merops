@@ -341,6 +341,15 @@ nat_map_spend <- nat_map_spend %>%
   filter(!is.na(Qnt_Pop_c))
 nat_map_spend <- nat_map_spend %>%
   filter(!is.na(Amt_Pop_c))
+nat_map_spend <- nat_map_spend %>%
+  mutate(Qnt_Pop = ifelse(is.na(Qnt_Pop), 0, Qnt_Pop))
+
+ggplot(nat_map, aes(x=long, y=lat, group=group)) +
+  geom_path(colour="grey70", size=0.01) + 
+  geom_polygon(data=nat_map_spend, aes(fill=Qnt_Pop)) + 
+  scale_fill_viridis() +
+  theme_map()
+
 ggplot(nat_map, aes(x=long, y=lat, group=group)) +
   geom_path(colour="grey70", size=0.1) + 
   geom_polygon(data=nat_map_spend, fill="#006698",
