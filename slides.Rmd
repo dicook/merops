@@ -1,7 +1,7 @@
 ---
 title: "Spatio-temporal effects in drug sales, <br>in association with demographics, provider, drugs choices and disease"
 author: "Team MEROPS (bee-eaters) <br>Monash Experts in R, Organising Pharmaceutical Sales"
-date: "<br>Members: Paul Harrison, Earo Wang, <br> Nat Tomasetti, Di Cook, Stuart Lee"
+date: "Members: Paul Harrison (paul.harrison@monash.edu) <br> Earo Wang (earo.wang@gmail.com) <br> Nat Tomasetti (nathaniel.tomasetti@monash.edu)<br> Di Cook (dicook@monash.edu)<br> Stuart Lee (lee.s@wehi.edu.au)"
 output:
   xaringan::moon_reader:
     lib_dir: libs
@@ -360,11 +360,11 @@ background-position: center top
 class: left
 # Outline
 
+- Spatial distribution: how do sales vary by post code, calibrated for population
 - Temporal trends in drug sales and the PBS safety net
-- Spatial distribution
 - How gender, age, and disease are related to sales
-- Data processing
-- Weird findings
+- Do providers have brand preferences?
+- And other weird things
 
 ---
 
@@ -505,7 +505,7 @@ Concession cards available to the elderly, disabled, unemployed, etc. Currently 
 * Concession card holders pay $6.30 per purchase but **nothing** beyond $378.00 each year.
 * Non-concession card holders $38.80 per purchase but $6.30 beyond $1,494.90 each year.
 
-In 2015-2016 \[2\], **59.3%** of PBS spending was for concession card holders, 16.6% to non-concession card holders, and 16.6% on "Section 100" drugs -- specialized drugs outside of normal PBS arrangements. 
+In 2015-2016 \[2\], **59.3%** of PBS spending was for concession card holders, 16.6% to non-concession card holders, 23.8% on "Section 100" drugs -- specialized drugs outside of normal PBS arrangements, and 0.3% on other categories. 
 
 **19.4%** of PBS spending was on the safety net for concession card holders, where the government pays the entire amount. This can be seen in the data.
 
@@ -519,7 +519,7 @@ In 2015-2016 \[2\], **59.3%** of PBS spending was for concession card holders, 1
 background-image: url(transparent_merops_small.png)
 background-position: center top
 class: left
-# Patients obtain less drugs to manage chronic illnesses before hitting the PBS safety net each year
+# Patients obtain less drugs before hitting the PBS safety net each year, including for chronic illnesses
 
 ```{r fig.width=10, fig.height=5}
 
