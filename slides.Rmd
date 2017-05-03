@@ -362,7 +362,8 @@ class: left
 # Outline
 
 - Spatial distribution: how do sales vary by post code, calibrated for population
-- Temporal trends in drug sales and the PBS safety net
+- Temporal trends in drug sales
+- Effect of the PBS safety net
 - How gender, age, and disease are related to sales
 - Do providers have brand preferences?
 - Fantastic beasts and where to find them ...
@@ -488,18 +489,31 @@ grid.arrange(p1, p2, p3, ncol=2, layout_matrix=rbind(c(1, 3), c(2, 3)))
 and seasonal, except for osteoporosis.
 ---
 
-# By gender?
+# Decrease in osteoporosis drugs primarily 
 
-```{r fig.width=10, fig.height=6}
-dispense_chronic_bygender_qtr %>% 
-  ggplot(aes(x = Dispense_YrQtr, y = trans_count)) +
+.pull-left[
+due to women, and increase in urology drugs primarily due to men. Women are the primary recipients of drugs for depression, hypertension, and contribute to increase in immunology drugs.
+]
+
+.pull-right[
+```{r fig.width=6, fig.height=8}
+dispense_chronic_bygender_qtr %>% ungroup() %>%
+    mutate(
+    ChronicIllness = if_else(
+      ChronicIllness == "Chronic Obstructive Pulmonary Disease (COPD)",
+      "COPD", ChronicIllness)
+  ) %>% 
+  ggplot(aes(x = Dispense_YrQtr, y = trans_count, colour=gender)) +
   geom_line() +
   geom_point() +
   facet_grid(ChronicIllness ~ gender, scales = "free_y") +
-  scale_x_yearqtr(format = "%Y Q%q", n = 5) +
+  scale_x_yearqtr(format = "Q%q", n = 5) +
+  scale_colour_brewer(palette="Dark2") +
   xlab("Dispense quarter") +
-  ylab("The number of transactions")
+  ylab("The number of transactions") + 
+  theme(strip.text.y = element_text(angle=0), legend.position="none")
 ```
+]
 
 ---
 # Digging out some postcodes of interest?
