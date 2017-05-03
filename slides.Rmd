@@ -291,11 +291,11 @@ background-position: center top
 class: left
 # Outline
 
+- Spatial distribution: how do sales vary by post code, calibrated for population
 - Temporal trends in drug sales and the PBS safety net
-- Spatial distribution
 - How gender, age, and disease are related to sales
-- Data processing
-- Weird findings
+- Do providers have brand preferences?
+- And other weird things
 
 ---
 
