@@ -475,6 +475,8 @@ p2 <- ggplot(data=mp, aes(fill=ifelse(is.na(Amt_Pop),0,Qnt_Pop))) +
 grid.arrange(p1, p2, ncol=2)
 ```
 
+Using total population of postcode. Per person spending would be higher
+than these numbers given that only one supplier is represented.
 ---
 
 background-image: url(transparent_merops_small.png)
