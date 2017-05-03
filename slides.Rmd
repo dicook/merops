@@ -38,6 +38,8 @@ library(gridExtra)
 library(ggthemes)
 library(ggmap)
 library(viridis)
+# devtools::install_github("earowang/tscognostics")
+# library(tscognostics)
 ```
 
 ```{r read_data, eval=FALSE}
@@ -82,7 +84,26 @@ dispense_chronic <- dispense_chronic_dat %>%
   ) %>% 
   filter(Dispense_Year >= 2011, Dispense_Year < 2016)
 save(dispense_chronic, file="data/dispense_chronic.rda")
+dispense_chronic_bygender <- dispense_chronic_full %>% 
+  group_by(gender, ChronicIllness, Dispense_Week) %>% 
+  tally() %>% 
+  mutate(
+    Dispense_Week = as_date(Dispense_Week),
+    Dispense_Year = year(Dispense_Week),
+    Dispense_Month = month(Dispense_Week, label = TRUE),
+    Dispense_Qtr = quarter(Dispense_Week)
+  ) %>% 
+  filter(Dispense_Year >= 2011, Dispense_Year < 2016)
 
+dispense_chronic_bygender_qtr <- dispense_chronic_bygender %>% 
+  group_by(gender, ChronicIllness, Dispense_Year, Dispense_Qtr) %>% 
+  summarise(trans_count = sum(n, na.rm = TRUE)) %>% 
+  mutate(Dispense_YrQtr = as.yearqtr(
+    paste(Dispense_Year, Dispense_Qtr, sep = " Q"), "%Y Q%q")
+  )
+
+save(dispense_chronic_bygender_qtr,
+     file="data/dispense_chronic_bygender_qtr.rda")
 
 # Look at zero-payment transactions
 dispense_all_dat <- trans %>%
@@ -199,17 +220,66 @@ postcode_tally <- left_join(store_tally, stores, by="Store_ID") %>%
   group_by(postcode) %>%
   summarise(Qnt = sum(Qnt), Amt = sum(Amt))
 save(postcode_tally, file="data/total_by_postcode.rda")
+
+dispense_chronic_full <- dispense_chronic_dat %>% 
+  left_join(illness, by = c("Drug_ID" = "MasterProductID")) %>% 
+  left_join(patients, by = "Patient_ID")
+
+dispense_chronic_bypostcode <- dispense_chronic_full %>% 
+  group_by(postcode, ChronicIllness, Dispense_Week) %>% 
+  tally() %>% 
+  mutate(
+    Dispense_Week = as_date(Dispense_Week),
+    Dispense_Year = year(Dispense_Week),
+    Dispense_Month = month(Dispense_Week, label = TRUE),
+    Dispense_Qtr = quarter(Dispense_Week)
+  ) %>% 
+  filter(Dispense_Year >= 2011, Dispense_Year < 2016)
+
+dispense_chronic_bypostcode_qtr <- dispense_chronic_bypostcode %>% 
+  ungroup() %>% 
+  mutate(
+    ChronicIllness = if_else(
+      ChronicIllness == "Chronic Obstructive Pulmonary Disease (COPD)",
+      "COPD", ChronicIllness)
+  ) %>% 
+  group_by(postcode, ChronicIllness, Dispense_Year, Dispense_Qtr) %>% 
+  summarise(trans_count = sum(n, na.rm = TRUE)) %>% 
+  mutate(Dispense_YrQtr = as.yearqtr(
+    paste(Dispense_Year, Dispense_Qtr, sep = " Q"), "%Y Q%q")
+  )
+save(dispense_chronic_bypostcode_qtr, 
+     file="data/dispense_chronic_bypostcode_qtr.rda")
+postcode_illness <- dispense_chronic_bypostcode_qtr %>% 
+  ungroup() %>% 
+  select(postcode, ChronicIllness, Dispense_YrQtr, trans_count) %>%  
+  split(.$ChronicIllness) %>% 
+  map(spread, postcode, trans_count, fill = 0)
+
+postcode_illness_ts <- postcode_illness %>% 
+  map(select, -c(ChronicIllness, Dispense_YrQtr)) 
+postcode_illness_ts <- postcode_illness_ts %>% 
+  lapply(function(x) ts(x, start = c(2011, 1), frequency = 4))
+
+cogs_ts <- postcode_illness_ts %>% 
+  # removev any postcode with transactions <= 300 over time
+  map(~ .[, apply(., 2, function(x) sum(x) > 300)]) %>%
+  # map(~ .[, apply(., 2, function(x) !any(x == 0))]) %>% # remove any 0's series
+  map(tsmeasures)
+save(cogs_ts, file="data/cogs.rda")
 ```
 
 ```{r preprocess_data}
 load("data/dispense.rda")
 load("data/dispense_bychronic.rda")
+load("data/dispense_chronic_bygender_qtr.rda")
 load("data/dispense_chronic.rda")
 load("data/dispense_zero_paid.rda")
 load("data/dispense_chronic_zero_paid.rda")
 load("data/illness_age.rda")
 load("data/illness_gender.rda")
 load("data/illness_illness.rda")
+load("data/cogs.rda")
 
 dispense <- dispense %>% 
   mutate(
@@ -295,7 +365,7 @@ class: left
 - Temporal trends in drug sales and the PBS safety net
 - How gender, age, and disease are related to sales
 - Do providers have brand preferences?
-- And other weird things
+- Fantastic beasts and where to find them ...
 
 ---
 
@@ -344,6 +414,15 @@ nat_map_spend <- nat_map_spend %>%
   filter(!is.na(Qnt_Pop_c))
 nat_map_spend <- nat_map_spend %>%
   filter(!is.na(Amt_Pop_c))
+nat_map_spend <- nat_map_spend %>%
+  mutate(Qnt_Pop = ifelse(is.na(Qnt_Pop), 0, Qnt_Pop))
+
+ggplot(nat_map, aes(x=long, y=lat, group=group)) +
+  geom_path(colour="grey70", size=0.01) + 
+  geom_polygon(data=nat_map_spend, aes(fill=Qnt_Pop)) + 
+  scale_fill_viridis() +
+  theme_map()
+
 ggplot(nat_map, aes(x=long, y=lat, group=group)) +
   geom_path(colour="grey70", size=0.1) + 
   geom_polygon(data=nat_map_spend, fill="#006698",
@@ -439,10 +518,127 @@ grid.arrange(p1, p2, p3, ncol=2, layout_matrix=rbind(c(1, 3), c(2, 3)))
 and seasonal, except for osteoporosis.
 ---
 
-# By gender and age??
+# By gender?
+
+```{r fig.width=10, fig.height=6}
+dispense_chronic_bygender_qtr %>% 
+  ggplot(aes(x = Dispense_YrQtr, y = trans_count)) +
+  geom_line() +
+  geom_point() +
+  facet_grid(ChronicIllness ~ gender, scales = "free_y") +
+  scale_x_yearqtr(format = "%Y Q%q", n = 5) +
+  xlab("Dispense quarter") +
+  ylab("The number of transactions")
+```
 
 ---
-# How to find some postcodes of interest?
+# Digging out some postcodes of interest?
+
+```{r fig.width=10, fig.height=6}
+load("data/dispense_chronic_bypostcode_qtr.rda")
+range01 <- function(x) { # normalise cognostics b/t 0 and 1
+  rng <- range(x, na.rm = TRUE)
+  (x - rng[1]) / (rng[2] - rng[1])
+}
+cogs_ts_scaled <- cogs_ts %>% 
+  map(~ apply(., 2, range01)) %>% # normalised with mean of 0, var of 1
+  map(as.data.frame)
+illness_names <- names(cogs_ts)
+postcode_2 <- cogs_ts %>% 
+  map(row.names)
+cogs_df <- cogs_ts_scaled %>% 
+  map2(illness_names, ~ mutate(.x, ChronicIllness = .y)) %>% 
+  map2(postcode_2, ~ mutate(.x, Postcode = .y)) %>% 
+  bind_rows() %>% 
+  mutate(
+    ChronicIllness = if_else(
+      ChronicIllness == "Chronic Obstructive Pulmonary Disease (COPD)",
+      "COPD", ChronicIllness)
+  ) %>% 
+  gather(Cognostics, Value, ACF1:trough) %>% 
+  as_tibble()
+
+cogs_df %>%
+  filter(
+    Cognostics %in% c("entropy", "linearity", "season", "spikiness")
+  ) %>% 
+  ggplot(aes(x = Cognostics, y = Value, group = Postcode)) +
+  geom_jitter(size = 0.2) +
+  facet_grid(ChronicIllness ~ .) +
+  ggtitle("Cognostics for each postcode over time") -> p1
+
+top1_up <- cogs_df %>%
+  filter(Cognostics == "linearity") %>%
+  group_by(ChronicIllness) %>% 
+  filter(row_number(Value) == n())
+
+dispense_chronic_bypostcode_qtr %>% 
+  right_join(top1_up, by = c("ChronicIllness", "postcode" = "Postcode")) %>% 
+  ggplot(aes(x = Dispense_YrQtr, y = trans_count)) +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~ ChronicIllness + postcode, scales = "free_y", ncol = 2) +
+  scale_x_yearqtr(format = "%Y Q%q", n = 5) +
+  xlab("Dispense quarter") +
+  ylab("The number of transactions") +
+  ggtitle("The most increasing postcode over time") -> p2
+grid.arrange(p1, p2, ncol=2)
+```
+
+Time series cognostics measure aspects such as overall variability (entropy), linear trend, seasonality and spikiness. These are computed for each postcode, giving them a rating on these sorts of patterns.
+---
+# Digging out some postcodes of interest?
+
+```{r fig.width=12, fig.height=8}
+top1_entropy <- cogs_df %>%
+  filter(Cognostics == "entropy") %>%
+  group_by(ChronicIllness) %>% 
+  filter(row_number(Value) == 1)
+
+dispense_chronic_bypostcode_qtr %>% 
+  right_join(top1_entropy, by = c("ChronicIllness", "postcode" = "Postcode")) %>% 
+  ggplot(aes(x = Dispense_YrQtr, y = trans_count)) +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~ ChronicIllness + postcode, scales = "free_y", ncol = 2) +
+  scale_x_yearqtr(format = "%Y Q%q", n = 5) +
+  xlab("Dispense quarter") +
+  ylab("The number of transactions") +
+  ggtitle("The most predictable postcode over time") -> p1
+
+top1_spikiness <- cogs_df %>%
+  filter(Cognostics == "spikiness") %>%
+  group_by(ChronicIllness) %>% 
+  filter(row_number(Value) == n())
+
+dispense_chronic_bypostcode_qtr %>% 
+  right_join(top1_spikiness, by = c("ChronicIllness", "postcode" = "Postcode")) %>% 
+  ggplot(aes(x = Dispense_YrQtr, y = trans_count)) +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~ ChronicIllness + postcode, scales = "free_y", ncol = 2) +
+  scale_x_yearqtr(format = "%Y Q%q", n = 5) +
+  xlab("Dispense quarter") +
+  ylab("The number of transactions") +
+  ggtitle("The most spiky postcode over time") -> p2
+
+top1_season <- cogs_df %>%
+  filter(Cognostics == "season") %>%
+  group_by(ChronicIllness) %>% 
+  filter(row_number(Value) == n())
+
+dispense_chronic_bypostcode_qtr %>% 
+  right_join(top1_season, by = c("ChronicIllness", "postcode" = "Postcode")) %>% 
+  ggplot(aes(x = Dispense_YrQtr, y = trans_count)) +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~ ChronicIllness + postcode, scales = "free_y", ncol = 2) +
+  scale_x_yearqtr(format = "%Y Q%q", n = 5) +
+  xlab("Dispense quarter") +
+  ylab("The number of transactions") +
+  ggtitle("The most seasonal postcode over time") -> p3
+grid.arrange(p1, p2, p3, ncol=3)
+```
 ---
 
 background-image: url(transparent_merops_small.png)
@@ -611,35 +807,46 @@ Flinders Island and buys their drugs on mainland Tasmania. Treatment was for Epi
 background-image: url(transparent_merops_small.png)
 background-position: center top
 class: left
-# 24 Patients spent more than $20,000 each.
+# 24 Patients spent more than $20,000 each
+
+These are their locations. And the top spending was on drugs for epilepsy, and depression. 
 ```{r fig.width=10, fig.height=6}
 load('data/highspend.rda')
-nat_map_pop = read_csv('nat_map_pop.csv')
+
+aus_map <- get_map(location = "Australia", zoom=4) 
+
 cd <- centroids %>% 
   mutate(HS = ifelse(POA_CODE %in% 
                        highspend$postcode, 1, 0)) %>%
   filter(HS == 1) 
-p1 <- ggplot(data=cd) + 
-  geom_point(aes(x=long_c, y=lat_c, colour='HS')) + 
-  geom_map(map=nat_map_pop, aes(map_id=id),
-           fill="grey90", colour="white") 
 
+p1 <- ggmap(aus_map) +
+  geom_point(data = cd, aes(x = long_c, y = lat_c)) +
+  theme(axis.text = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.ticks = element_blank())
+
+# bar plot
 load('data/hightrans.rda')
 load("data/illness.rda")
-hightrans %>% 
+highillness <- hightrans %>% 
   left_join(illness, 
             by=c('Drug_ID' = 'MasterProductID')) %>%
   group_by(ChronicIllness) %>%
-  #filter(ChronicIllness != 'NA') %>% 
-  summarise(TotalSpend = sum(PatientPrice_Amt)) ->
-  highillness
+  filter(!is.na(ChronicIllness)) %>% 
+  summarise(TotalSpend = sum(PatientPrice_Amt)) %>%
+  mutate(ChronicIllness = gsub("Chronic Obstructive Pulmonary Disease \\(|\\)" ,"", ChronicIllness),
+         ChronicIllness = factor(ChronicIllness, levels = ChronicIllness[order(TotalSpend)])) 
+
 p2 <- ggplot(data=highillness) +
   geom_bar(aes(y=TotalSpend, x=ChronicIllness),
            stat='identity') + 
-  theme(axis.text.x = element_text(angle = 90, 
-                                   hjust = 1)) + 
   labs(x='Drug Purpose', 
-       y='Expenditure for >$20,000 patients')
+       y='Expenditure for >$20,000 patients') +
+  coord_flip()
+
+grid.arrange(p1, p2, ncol = 2)
 ```
 ---
 background-image: url(transparent_merops_small.png)
@@ -676,7 +883,8 @@ class: left
 * Pravastatin is a common anti-cholesterol drug, with over 2,000,000 purchases.
 * 14 Manufacturers compete at 4 different dosages.
 * Two of Apotex's products make up less than half a percent of the 20-40mg Market.
-* A prescriber in postcode 6216 (Woodanilling) prescribed the drug Pravastatin 78 times, 55 of which were from Apotex, about about 140 times the typical prescription rate. (Woodanilling is a small town in the Great Southern region of Western Australia, 254 kilometres south of Perth on the Great Southern Highway, 24 kilometres from Katanning and 30 kilometres from Wagin.)
+* A prescriber in postcode 6216 (Woodanilling) prescribed the drug Pravastatin 78 times, 55 of which were from Apotex, about about 140 times the typical prescription rate. 
+* From wikipedia: `Woodanilling is a small town in the Great Southern region of Western Australia, 254 kilometres south of Perth on the Great Southern Highway, 24 kilometres from Katanning and 30 kilometres from Wagin.`
 
 ---
 
@@ -685,8 +893,12 @@ background-position: center top
 class: left
 # Acknowledgements
 
+All analysis was done using [R](http://https://cran.r-project.org), using the packages `knitr`, `zoo`, `RSQLite`, `forcats`, `tidyverse`, `lubridate`, `gridExtra`, `ggthemes`, `viridis` and their dependencies.
+
 Slides created via the R package [**xaringan**](https://github.com/yihui/xaringan).
 
 The chakra comes from [remark.js](https://remarkjs.com), [**knitr**](http://yihui.name/knitr), and [R Markdown](https://rmarkdown.rstudio.com).
 
 Rainbow bee-eater (merops ornatus) photo by JJ Harrison, CC license
+
+Thanks to Phil Brierley for organising the datathon, and NostraData for making the data available.
