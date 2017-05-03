@@ -364,7 +364,7 @@ class: left
 - Temporal trends in drug sales and the PBS safety net
 - How gender, age, and disease are related to sales
 - Do providers have brand preferences?
-- And other weird things
+- Fantastic beasts and where to find them ...
 
 ---
 
@@ -670,7 +670,9 @@ Flinders Island and buys their drugs on mainland Tasmania. Treatment was for Epi
 background-image: url(transparent_merops_small.png)
 background-position: center top
 class: left
-# 24 Patients spent more than $20,000 each.
+# 24 Patients spent more than $20,000 each
+
+These are their locations. And the top spending was on drugs for epilepsy, and depression. 
 ```{r fig.width=10, fig.height=6}
 load('data/highspend.rda')
 
@@ -744,7 +746,8 @@ class: left
 * Pravastatin is a common anti-cholesterol drug, with over 2,000,000 purchases.
 * 14 Manufacturers compete at 4 different dosages.
 * Two of Apotex's products make up less than half a percent of the 20-40mg Market.
-* A prescriber in postcode 6216 (Woodanilling) prescribed the drug Pravastatin 78 times, 55 of which were from Apotex, about about 140 times the typical prescription rate. (Woodanilling is a small town in the Great Southern region of Western Australia, 254 kilometres south of Perth on the Great Southern Highway, 24 kilometres from Katanning and 30 kilometres from Wagin.)
+* A prescriber in postcode 6216 (Woodanilling) prescribed the drug Pravastatin 78 times, 55 of which were from Apotex, about about 140 times the typical prescription rate. 
+* From wikipedia: `Woodanilling is a small town in the Great Southern region of Western Australia, 254 kilometres south of Perth on the Great Southern Highway, 24 kilometres from Katanning and 30 kilometres from Wagin.`
 
 ---
 
@@ -753,8 +756,12 @@ background-position: center top
 class: left
 # Acknowledgements
 
+All analysis was done using [R](http://https://cran.r-project.org), using the packages `knitr`, `zoo`, `RSQLite`, `forcats`, `tidyverse`, `lubridate`, `gridExtra`, `ggthemes`, `viridis` and their dependencies.
+
 Slides created via the R package [**xaringan**](https://github.com/yihui/xaringan).
 
 The chakra comes from [remark.js](https://remarkjs.com), [**knitr**](http://yihui.name/knitr), and [R Markdown](https://rmarkdown.rstudio.com).
 
 Rainbow bee-eater (merops ornatus) photo by JJ Harrison, CC license
+
+Thanks to Phil Brierley for organising the datathon, and XXX for making the data available.
