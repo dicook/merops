@@ -362,7 +362,8 @@ class: left
 # Outline
 
 - Spatial distribution: how do sales vary by post code, calibrated for population
-- Temporal trends in drug sales and the PBS safety net
+- Temporal trends in drug sales
+- Effect of the PBS safety net
 - How gender, age, and disease are related to sales
 - Do providers have brand preferences?
 - Fantastic beasts and where to find them ...
@@ -376,7 +377,7 @@ class: left
 
 Counts by postcode adjusted to per person, using Census population numbers. Low quantities (<20) tends to be rural, medium (20-100) towards the east coast concentrating in NSW, and a few locations have massive numbers dispensed (more than one thousand per person) - 2015 totals
 
-```{r eval=FALSE}
+```{r warning=FALSE}
 load("data/total_by_postcode.rda")
 pop <- read_csv("postcode_population.csv")
 spend_pop_postcode <- left_join(postcode_tally, 
@@ -404,6 +405,9 @@ spend_pop_postcode$Amt_Pop_c <- factor(spend_pop_postcode$Amt_Pop_c,
                "(20,100]",">100"))
 nat_map <- read_csv("nat_map_pop.csv")
 nat_map <- nat_map %>% filter(long >= 110, long <= 155)
+```
+
+```{r eval=FALSE}
 nat_map_spend <- left_join(nat_map,
       spend_pop_postcode[,c(1, 13:16)],
       by=c("POA_CODE"="postcode"))
@@ -436,6 +440,20 @@ ggplot(nat_map, aes(x=long, y=lat, group=group)) +
 
 <img src="map_quantity.png" width="800">
 
+```{r warning=FALSE, fig.width=7, fig.height=2}
+postcode_id <- distinct(nat_map, POA_CODE, id)
+
+spend_pop_postcode %>%
+right_join(postcode_id, by=c("postcode"="POA_CODE")) %>%
+ggplot(aes(fill=ifelse(is.na(Qnt_Pop),0,Qnt_Pop))) + coord_fixed() +
+geom_map(map=nat_map,aes(map_id=id)) +
+scale_y_continuous(limits=c(-38.5,-37.5),oob=function(a,b)a) +
+scale_x_continuous(limits=c(143.5,145.5),oob=function(a,b)a) +
+scale_fill_continuous(limits=c(0,15)) +
+labs(x="",y="",fill="Quantity\nper person") +
+theme_map()
+```
+
 ---
 
 background-image: url(transparent_merops_small.png)
@@ -446,6 +464,19 @@ class: left
 Highest amounts spent per person in a postcode was close to $2000, and in south-east Australia.
 
 <img src="map_amount.png" width="800">
+
+```{r warning=FALSE, fig.width=7, fig.height=2}
+spend_pop_postcode %>%
+right_join(postcode_id, by=c("postcode"="POA_CODE")) %>%
+ggplot(aes(fill=ifelse(is.na(Amt_Pop),0,Qnt_Pop))) + coord_fixed() +
+geom_map(map=nat_map,aes(map_id=id)) +
+scale_y_continuous(limits=c(-38.5,-37.5),oob=function(a,b)a) +
+scale_x_continuous(limits=c(143.5,145.5),oob=function(a,b)a) +
+scale_fill_continuous(limits=c(0,15)) +
+labs(x="",y="",fill="Spending\nper person") +
+theme_map()
+```
+
 ---
 
 background-image: url(transparent_merops_small.png)
@@ -488,18 +519,31 @@ grid.arrange(p1, p2, p3, ncol=2, layout_matrix=rbind(c(1, 3), c(2, 3)))
 and seasonal, except for osteoporosis.
 ---
 
-# By gender?
+# Decrease in osteoporosis drugs primarily 
 
-```{r fig.width=10, fig.height=7}
-dispense_chronic_bygender_qtr %>% 
-  ggplot(aes(x = Dispense_YrQtr, y = trans_count)) +
+.pull-left[
+due to women, and increase in urology drugs primarily due to men. Women are the primary recipients of drugs for depression, hypertension, and contribute to increase in immunology drugs.
+]
+
+.pull-right[
+```{r fig.width=6, fig.height=8}
+dispense_chronic_bygender_qtr %>% ungroup() %>%
+    mutate(
+    ChronicIllness = if_else(
+      ChronicIllness == "Chronic Obstructive Pulmonary Disease (COPD)",
+      "COPD", ChronicIllness)
+  ) %>% 
+  ggplot(aes(x = Dispense_YrQtr, y = trans_count, colour=gender)) +
   geom_line() +
   geom_point() +
   facet_grid(ChronicIllness ~ gender, scales = "free_y") +
-  scale_x_yearqtr(format = "%Y Q%q", n = 5) +
+  scale_x_yearqtr(format = "Q%q", n = 5) +
+  scale_colour_brewer(palette="Dark2") +
   xlab("Dispense quarter") +
-  ylab("The number of transactions")
+  ylab("The number of transactions") + 
+  theme(strip.text.y = element_text(angle=0), legend.position="none")
 ```
+]
 
 ---
 # Digging out some postcodes of interest?
