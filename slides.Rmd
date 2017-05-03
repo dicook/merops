@@ -558,7 +558,8 @@ dispense_chronic_bygender_qtr %>% ungroup() %>%
 ---
 # Digging out some postcodes of interest?
 
-```{r fig.width=10, fig.height=6}
+.pull-left[
+```{r fig.width=10, fig.height=12}
 load("data/dispense_chronic_bypostcode_qtr.rda")
 range01 <- function(x) { # normalise cognostics b/t 0 and 1
   rng <- range(x, na.rm = TRUE)
@@ -589,7 +590,22 @@ cogs_df %>%
   ggplot(aes(x = Cognostics, y = Value, group = Postcode)) +
   geom_jitter(size = 0.2) +
   facet_grid(ChronicIllness ~ .) +
-  ggtitle("Cognostics for each postcode over time") -> p1
+  ggtitle("Cognostics for each postcode over time")
+```
+]
+.pull-right[
+* Time series cognostics measure various aspects such as overall variability (entropy), linear trend, seasonality and spikiness. 
+
+* These are computed for each postcode, giving them a rating on these sorts of patterns.
+
+* The jitter plot on the left-hand side shows the ratings on different measures for each postcode, faceted by the diseases. Each dot represents a postcode.
+]
+
+
+---
+# Digging out some postcodes of interest?
+
+```{r fig.width=12, fig.height=8}
 
 top1_up <- cogs_df %>%
   filter(Cognostics == "linearity") %>%
@@ -605,15 +621,9 @@ dispense_chronic_bypostcode_qtr %>%
   scale_x_yearqtr(format = "%Y Q%q", n = 5) +
   xlab("Dispense quarter") +
   ylab("The number of transactions") +
-  ggtitle("The most increasing postcode over time") -> p2
-grid.arrange(p1, p2, ncol=2)
-```
+  ggtitle("The most increasing postcode over time") -> p1
 
-Time series cognostics measure aspects such as overall variability (entropy), linear trend, seasonality and spikiness. These are computed for each postcode, giving them a rating on these sorts of patterns.
----
-# Digging out some postcodes of interest?
 
-```{r fig.width=12, fig.height=8}
 top1_entropy <- cogs_df %>%
   filter(Cognostics == "entropy") %>%
   group_by(ChronicIllness) %>% 
@@ -628,8 +638,13 @@ dispense_chronic_bypostcode_qtr %>%
   scale_x_yearqtr(format = "%Y Q%q", n = 5) +
   xlab("Dispense quarter") +
   ylab("The number of transactions") +
-  ggtitle("The most predictable postcode over time") -> p1
+  ggtitle("The most predictable postcode over time") -> p2
+grid.arrange(p1, p2, ncol=2)
+```
+---
+# Digging out some postcodes of interest?
 
+```{r fig.width=12, fig.height=8}
 top1_spikiness <- cogs_df %>%
   filter(Cognostics == "spikiness") %>%
   group_by(ChronicIllness) %>% 
@@ -644,7 +659,7 @@ dispense_chronic_bypostcode_qtr %>%
   scale_x_yearqtr(format = "%Y Q%q", n = 5) +
   xlab("Dispense quarter") +
   ylab("The number of transactions") +
-  ggtitle("The most spiky postcode over time") -> p2
+  ggtitle("The most spiky postcode over time") -> p1
 
 top1_season <- cogs_df %>%
   filter(Cognostics == "season") %>%
@@ -660,8 +675,8 @@ dispense_chronic_bypostcode_qtr %>%
   scale_x_yearqtr(format = "%Y Q%q", n = 5) +
   xlab("Dispense quarter") +
   ylab("The number of transactions") +
-  ggtitle("The most seasonal postcode over time") -> p3
-grid.arrange(p1, p2, p3, ncol=3)
+  ggtitle("The most seasonal postcode over time") -> p2
+grid.arrange(p1, p2, ncol=2)
 ```
 ---
 
@@ -831,9 +846,10 @@ Flinders Island and buys their drugs on mainland Tasmania. Treatment was for Epi
 background-image: url(transparent_merops_small.png)
 background-position: center top
 class: left
-# 24 Patients spent more than $20,000 each
+# Hey, Big Spender!
+24 patients around Australia spent more than $20,000 on prescriptions. 
+The top spending was on drugs for epilepsy, and depression. 
 
-These are their locations. And the top spending was on drugs for epilepsy, and depression. 
 ```{r fig.width=10, fig.height=6}
 load('data/highspend.rda')
 
@@ -877,21 +893,33 @@ background-image: url(transparent_merops_small.png)
 background-position: center top
 class: left
 
-# Drug prescriptions for postcode by 
-expected market share. Top 15 greater than expected. There is some evidence of prescribers making drug preferences for their patients.
+# Preferential prescriptions
+Drug prescription purchases for postcode by expected market share. 
+There is some evidence of prescribers making drug preferences for their patients.
 
 ```{r fig.width=10, fig.height=5}
 load("data/favoured_manuf.rda")
-top10 = FavouredManuf$ManufacturerName[1:10]
+
+top10 <- FavouredManuf$ManufacturerName[1:10]
+
 SubsetFavoured <- FavouredManuf %>%
   filter(ManufacturerName %in% top10) %>% 
-  mutate(postcode = as.numeric(postcode))
-SubsetFavoured %>% arrange(desc(ratio)) %>% 
-  select(ManufacturerName, postcode, ratio) %>% head(15)
-#ggplot(SubsetFavoured) + 
- # geom_point(aes(postcode, ratio,
- #                colour=ManufacturerName)) +
- # labs(y='Ratio of Total : Expected Revenue')
+  mutate(postcode = as.numeric(postcode)) %>% 
+  arrange(desc(ratio)) %>% 
+  filter(ratio > 1, purchases > 50)
+
+
+ggplot(data = SubsetFavoured,
+       aes( x= purchases, y = expected)) + 
+  geom_jitter() +
+  ggrepel::geom_label_repel(data = SubsetFavoured %>% 
+                             head(7) %>% 
+                             mutate(maker = gsub("PTY|L|LTD|PT", "", ManufacturerName)),
+                           aes(x = purchases, y = expected, label = maker)) +
+  scale_x_log10() +
+  scale_y_log10() +
+  xlab("Purchases") + ylab("Expected Purchases")
+
 ```
 
 * Many manufacturers compete to sell the same generic ingredient.
