@@ -306,7 +306,7 @@ class: left
 
 Counts by postcode adjusted to per person, using Census population numbers. Low quantities (<20) tends to be rural, medium (20-100) towards the east coast concentrating in NSW, and a few locations have massive numbers dispensed (more than one thousand per person) - 2015 totals
 
-```{r eval=FALSE}
+```{r warning=FALSE}
 load("data/total_by_postcode.rda")
 pop <- read_csv("postcode_population.csv")
 spend_pop_postcode <- left_join(postcode_tally, 
@@ -334,6 +334,9 @@ spend_pop_postcode$Amt_Pop_c <- factor(spend_pop_postcode$Amt_Pop_c,
                "(20,100]",">100"))
 nat_map <- read_csv("nat_map_pop.csv")
 nat_map <- nat_map %>% filter(long >= 110, long <= 155)
+```
+
+```{r eval=FALSE}
 nat_map_spend <- left_join(nat_map,
       spend_pop_postcode[,c(1, 13:16)],
       by=c("POA_CODE"="postcode"))
@@ -357,6 +360,20 @@ ggplot(nat_map, aes(x=long, y=lat, group=group)) +
 
 <img src="map_quantity.png" width="800">
 
+```{r warning=FALSE, fig.width=7, fig.height=2}
+postcode_id <- distinct(nat_map, POA_CODE, id)
+
+spend_pop_postcode %>%
+right_join(postcode_id, by=c("postcode"="POA_CODE")) %>%
+ggplot(aes(fill=ifelse(is.na(Qnt_Pop),0,Qnt_Pop))) + coord_fixed() +
+geom_map(map=nat_map,aes(map_id=id)) +
+scale_y_continuous(limits=c(-38.5,-37.5),oob=function(a,b)a) +
+scale_x_continuous(limits=c(143.5,145.5),oob=function(a,b)a) +
+scale_fill_continuous(limits=c(0,15)) +
+labs(x="",y="",fill="Quantity\nper person") +
+theme_map()
+```
+
 ---
 
 background-image: url(transparent_merops_small.png)
@@ -367,6 +384,19 @@ class: left
 Highest amounts spent per person in a postcode was close to $2000, and in south-east Australia.
 
 <img src="map_amount.png" width="800">
+
+```{r warning=FALSE, fig.width=7, fig.height=2}
+spend_pop_postcode %>%
+right_join(postcode_id, by=c("postcode"="POA_CODE")) %>%
+ggplot(aes(fill=ifelse(is.na(Amt_Pop),0,Qnt_Pop))) + coord_fixed() +
+geom_map(map=nat_map,aes(map_id=id)) +
+scale_y_continuous(limits=c(-38.5,-37.5),oob=function(a,b)a) +
+scale_x_continuous(limits=c(143.5,145.5),oob=function(a,b)a) +
+scale_fill_continuous(limits=c(0,15)) +
+labs(x="",y="",fill="Spending\nper person") +
+theme_map()
+```
+
 ---
 
 background-image: url(transparent_merops_small.png)
