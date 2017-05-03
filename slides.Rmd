@@ -1,7 +1,7 @@
 ---
 title: "Spatio-temporal effects in drug sales, <br>in association with demographics, provider, drugs choices and disease"
 author: "Team MEROPS (bee-eaters) <br>Monash Experts in R, Organising Pharmaceutical Sales"
-date: "<br>Members: Paul Harrison, Earo Wang, <br> Nat Tomasetti, Di Cook, Stuart Lee"
+date: "Members: Paul Harrison (paul.harrison@monash.edu) <br> Earo Wang (earo.wang@gmail.com) <br> Nat Tomasetti (nathaniel.tomasetti@monash.edu)<br> Di Cook (dicook@monash.edu)<br> Stuart Lee (lee.s@wehi.edu.au)"
 output:
   xaringan::moon_reader:
     lib_dir: libs
